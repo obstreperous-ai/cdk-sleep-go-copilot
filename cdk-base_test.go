@@ -1,17 +1,22 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/assertions"
-	"github.com/aws/jsii-runtime-go"
+	_jsii_ "github.com/aws/jsii-runtime-go"
 )
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	_jsii_.Close()
+	os.Exit(code)
+}
 
 // TestCdkBaseStackSynthesizes verifies the base stack synthesizes without error.
 func TestCdkBaseStackSynthesizes(t *testing.T) {
-	defer jsii.Close()
-
 	// GIVEN
 	app := awscdk.NewApp(nil)
 
