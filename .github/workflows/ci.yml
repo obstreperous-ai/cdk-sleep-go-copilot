@@ -24,7 +24,7 @@ jobs:
           node-version: "22"
 
       - name: Install AWS CDK CLI
-        run: npm install -g aws-cdk
+        run: npm install -g aws-cdk@2.181.1
 
       - name: Download Go modules
         run: go mod download
