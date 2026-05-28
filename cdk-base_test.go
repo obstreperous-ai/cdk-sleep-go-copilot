@@ -18,9 +18,6 @@ func TestCdkBaseStackSynthesizes(t *testing.T) {
 	// WHEN
 	stack := NewCdkBaseStack(app, "MyStack", nil)
 
-	// THEN – template must be obtainable (i.e. synth succeeds)
-	template := assertions.Template_FromStack(stack, nil)
-	if template == nil {
-		t.Fatal("expected a non-nil CloudFormation template")
-	}
+	// THEN – obtaining the template is itself the synthesis assertion
+	assertions.Template_FromStack(stack, nil)
 }
