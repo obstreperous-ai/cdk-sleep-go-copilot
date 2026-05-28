@@ -98,4 +98,4 @@ flowchart TD
 
 ---
 
-> **Note:** Keep this document and its Mermaid diagram in sync with every infrastructure change. The CI pipeline will reject PRs where ARCHITECTURE.md diverges from the deployed constructs.
+> **Note:** Keep this document and its Mermaid diagram in sync with every infrastructure change. Update `ARCHITECTURE.md` as part of the same PR whenever deployed constructs, event flow, or component relationships change.
