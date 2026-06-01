@@ -71,7 +71,7 @@ error-catch, and visual observability. The state machine coordinates:
 
 1. **Validate & Extract Metadata** — a `ValidateAudio` Lambda verifies the
    object (format, size, duration, sample rate) and records the initial
-   `PENDING` record. Invalid input transitions straight to the failure path.
+   `PENDING` status. Invalid input transitions straight to the failure path.
 2. **Generate Voice (Amazon Polly)** — synthesizes soothing narration / guided
    sleep audio from configured text or user-supplied prompts.
 3. **Enhance / Generate Soundscape (Amazon Bedrock)** — *optional* step
