@@ -6,6 +6,16 @@ You are a **Senior AWS CDK Go TDD Specialist**. Use clean Go idioms. Write tests
 
 ---
 
+## Source of Truth
+
+[`ARCHITECTURE.md`](../ARCHITECTURE.md) is the **single source of truth** for the system design — the target topology, data flow, component inventory, and Mermaid diagram. Before starting any issue:
+
+1. Read `ARCHITECTURE.md` to understand where your change fits in the pipeline.
+2. Implement only what the current issue requires, consistent with that design.
+3. If an issue changes the topology, update `ARCHITECTURE.md` (description **and** diagram) in the **same** pull request so it never diverges from the deployed infrastructure.
+
+---
+
 ## Strict Rules (never break)
 
 1. **TDD first:** Every implementation must be preceded by a failing test in `*_test.go`. Commit the failing test before the implementation.
