@@ -4,6 +4,12 @@ Thank you for contributing! This project follows a strict **Test-Driven Developm
 
 ---
 
+## Source of Truth: ARCHITECTURE.md
+
+[`ARCHITECTURE.md`](ARCHITECTURE.md) is the **canonical reference** for the entire system — the target architecture, data flow, AWS service choices, and Mermaid diagram. Every issue and pull request must align with it. When an infrastructure change alters the topology, update `ARCHITECTURE.md` (both the prose **and** the Mermaid diagram) in the same PR so the document and the deployed stack never diverge.
+
+---
+
 ## Code of Conduct
 
 Be respectful, constructive, and inclusive. See [GitHub's Community Guidelines](https://docs.github.com/en/site-policy/github-terms/github-community-guidelines) for details.
