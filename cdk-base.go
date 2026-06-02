@@ -2,7 +2,8 @@ package main
 
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
-	// "github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsevents"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -18,12 +19,34 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 	}
 	stack := awscdk.NewStack(scope, &id, &sprops)
 
-	// The code that defines your stack goes here
+	// Input S3 Bucket - receives raw audio uploads
+	inputBucket := awss3.NewBucket(stack, jsii.String("SleepAudioInputBucket"), &awss3.BucketProps{
+		Encryption:        awss3.BucketEncryption_S3_MANAGED,
+		Versioned:         jsii.Bool(true),
+		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
+		EventBridgeEnabled: jsii.Bool(true),
+	})
 
-	// example resource
-	// queue := awssqs.NewQueue(stack, jsii.String("CdkBaseQueue"), &awssqs.QueueProps{
-	// 	VisibilityTimeout: awscdk.Duration_Seconds(jsii.Number(300)),
-	// })
+	// Output S3 Bucket - stores processed audio
+	awss3.NewBucket(stack, jsii.String("SleepAudioOutputBucket"), &awss3.BucketProps{
+		Encryption:        awss3.BucketEncryption_S3_MANAGED,
+		Versioned:         jsii.Bool(true),
+		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
+	})
+
+	// EventBridge Rule - triggers on Object Created events from Input Bucket
+	awsevents.NewRule(stack, jsii.String("AudioUploadedRule"), &awsevents.RuleProps{
+		EventPattern: &awsevents.EventPattern{
+			Source:     jsii.Strings("aws.s3"),
+			DetailType: jsii.Strings("Object Created"),
+			Detail: &map[string]interface{}{
+				"bucket": map[string]interface{}{
+					"name": jsii.Strings(*inputBucket.BucketName()),
+				},
+			},
+		},
+		Enabled: jsii.Bool(true),
+	})
 
 	return stack
 }
