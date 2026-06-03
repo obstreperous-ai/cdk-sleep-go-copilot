@@ -3,9 +3,14 @@
 > **Status:** Living design document — the single source of truth for the
 > `cdk-sleep-go-copilot` system. Every future issue and pull request must keep
 > this document (and its Mermaid diagram) in sync with the deployed
-> infrastructure. No CDK stack code exists yet; this document defines the target
-> design that the Test-Driven Development (TDD) issues will implement
-> incrementally.
+> infrastructure.
+>
+> **Implementation Status (as of Issue #3):** 
+> - ✅ Core S3 Buckets (Input & Output) with encryption, versioning
+> - ✅ EventBridge Rule for Object Created events
+> - ⏳ Step Functions State Machine (planned in Issue #4)
+> - ⏳ Lambda Functions (ValidateAudio, FinalizeAudio) - planned
+> - ⏳ DynamoDB Table, SNS Topic, CloudWatch integration - planned
 
 ---
 
@@ -147,54 +152,95 @@ failure is silently lost.
 | Polly / Bedrock | Managed AI | Invoked as Step Functions service integrations |
 | Log groups + alarms | CloudWatch | Per-Lambda logs, state-machine logs, failure alarms |
 
+### Currently Implemented (Issue #3)
+
+The following core components are **currently deployed** in the CDK stack:
+
+#### `SleepAudioInputBucket` (AWS::S3::Bucket)
+- **Encryption:** S3-managed (SSE-S3 / AES256)
+- **Versioning:** Enabled
+- **Public Access:** Blocked (all four block settings enabled)
+- **EventBridge Notifications:** Enabled via `EventBridgeEnabled: true`
+- **Purpose:** Receives raw audio uploads from authenticated clients via pre-signed URLs or Cognito
+
+#### `SleepAudioOutputBucket` (AWS::S3::Bucket)
+- **Encryption:** S3-managed (SSE-S3 / AES256)
+- **Versioning:** Enabled
+- **Public Access:** Blocked (all four block settings enabled)
+- **Purpose:** Stores processed/enriched audio files after pipeline completion
+
+#### `AudioUploadedRule` (AWS::Events::Rule)
+- **Event Pattern:** Matches `source: aws.s3`, `detail-type: Object Created`
+- **Scope:** Filters events to only the `SleepAudioInputBucket`
+- **State:** Enabled
+- **Target:** Currently a placeholder; will target Step Functions State Machine in Issue #4
+- **Purpose:** Detects new audio uploads and triggers the processing workflow
+
+### Not Yet Implemented (Future Issues)
+- **Step Functions State Machine** (`AudioProcessingStateMachine`) — Issue #4
+- **Lambda Functions** (`ValidateAudio`, `FinalizeAudio`) — Issue #4+
+- **DynamoDB Table** (`SleepSessionsTable`) — Issue #5+
+- **SNS Topic** (`SleepSessionNotificationsTopic`) — Issue #5+
+- **CloudWatch Alarms** and observability integration — Issue #6+
+
 ---
 
 ## 5. Architecture Diagram
+
+> **Legend:**  
+> - **Solid borders** = Currently implemented (Issue #3)  
+> - **Dashed borders** = Planned for future issues
 
 ```mermaid
 flowchart TD
     Client(["Client<br/>(mobile / web / IoT)"])
 
-    subgraph Ingestion
-        S3In["Amazon S3<br/>Input Bucket<br/>(private, encrypted)"]
-        EB["Amazon EventBridge<br/>AudioUploadedRule"]
+    subgraph Ingestion ["Ingestion (✅ Implemented)"]
+        S3In["Amazon S3<br/>Input Bucket<br/>(private, encrypted, versioned)"]
+        EB["Amazon EventBridge<br/>AudioUploadedRule<br/>(Object Created)"]
     end
 
-    subgraph Processing["AWS Step Functions — AudioProcessingStateMachine"]
+    subgraph Processing["AWS Step Functions — AudioProcessingStateMachine (⏳ Planned)"]
         Validate["Lambda: ValidateAudio<br/>validate + extract metadata"]
         Polly["Amazon Polly<br/>soothing voice / TTS"]
         Bedrock["Amazon Bedrock<br/>(optional) AI soundscape"]
         Finalize["Lambda: FinalizeAudio<br/>assemble + persist"]
     end
 
-    subgraph Storage
-        S3Out["Amazon S3<br/>Output Bucket<br/>(versioning enabled)"]
-        DDB["Amazon DynamoDB<br/>SleepSessionsTable"]
+    subgraph Storage ["Storage (✅ Output Bucket Implemented)"]
+        S3Out["Amazon S3<br/>Output Bucket<br/>(versioning enabled, encrypted)"]
+        DDB["Amazon DynamoDB<br/>SleepSessionsTable<br/>(⏳ Planned)"]
     end
 
-    SNS["Amazon SNS<br/>SleepSessionNotificationsTopic"]
-    CW["Amazon CloudWatch<br/>Logs + Alarms"]
+    SNS["Amazon SNS<br/>SleepSessionNotificationsTopic<br/>(⏳ Planned)"]
+    CW["Amazon CloudWatch<br/>Logs + Alarms<br/>(⏳ Planned)"]
     Subs(["Subscribers<br/>(email / push / ops)"])
 
     Client -- "1. upload audio (pre-signed URL)" --> S3In
-    S3In -- "2. Object Created event" --> EB
-    EB -- "3. start execution" --> Validate
-    Validate -- "4. generate voice" --> Polly
-    Polly -- "5. optional enhance" --> Bedrock
-    Bedrock --> Finalize
+    S3In == "2. Object Created event" ==> EB
+    EB -. "3. start execution (future)" .-> Validate
+    Validate -. "4. generate voice" .-> Polly
+    Polly -. "5. optional enhance" .-> Bedrock
+    Bedrock -.-> Finalize
     Polly -. "Bedrock disabled" .-> Finalize
-    Finalize -- "6a. store processed audio" --> S3Out
-    Finalize -- "6b. write metadata + status" --> DDB
-    Finalize -- "7. completion notification" --> SNS
+    Finalize -. "6a. store processed audio" .-> S3Out
+    Finalize -. "6b. write metadata + status" .-> DDB
+    Finalize -. "7. completion notification" .-> SNS
     Validate -. "on failure" .-> SNS
     Finalize -. "on failure" .-> SNS
-    SNS --> Subs
+    SNS -.-> Subs
 
     Validate -. logs/metrics .-> CW
     Finalize -. logs/metrics .-> CW
     Polly -. logs/metrics .-> CW
     Bedrock -. logs/metrics .-> CW
-    CW -- "alarm on failure" --> SNS
+    CW -. "alarm on failure" .-> SNS
+    
+    classDef implemented fill:#d4edda,stroke:#28a745,stroke-width:3px;
+    classDef planned fill:#f8f9fa,stroke:#6c757d,stroke-width:2px,stroke-dasharray: 5 5;
+    
+    class S3In,EB,S3Out implemented;
+    class Validate,Polly,Bedrock,Finalize,DDB,SNS,CW,Subs planned;
 ```
 
 ---
