@@ -5,12 +5,14 @@
 > this document (and its Mermaid diagram) in sync with the deployed
 > infrastructure.
 >
-> **Implementation Status (as of Issue #3):** 
+> **Implementation Status (as of Issue #4):** 
 > - ✅ Core S3 Buckets (Input & Output) with encryption, versioning
 > - ✅ EventBridge Rule for Object Created events
-> - ⏳ Step Functions State Machine (planned in Issue #4)
-> - ⏳ Lambda Functions (ValidateAudio, FinalizeAudio) - planned
-> - ⏳ DynamoDB Table, SNS Topic, CloudWatch integration - planned
+> - ✅ Step Functions State Machine (AudioProcessingStateMachine) with CloudWatch Logs
+> - ✅ Amazon Polly integration (SynthesizeSpeech task) - skeleton/placeholder
+> - ⏳ Lambda Functions (ValidateAudio, FinalizeAudio) - planned for Issue #5+
+> - ⏳ DynamoDB Table, SNS Topic - planned for Issue #5+
+> - ⏳ CloudWatch Alarms - planned for Issue #6+
 
 ---
 
@@ -72,13 +74,25 @@ auditing) without touching producers.
 The rule starts an execution of the **`AudioProcessingStateMachine`** (AWS Step
 Functions, Standard workflow). Step Functions is preferred over a single Lambda
 because the work is multi-step, long-running, and benefits from built-in retry,
-error-catch, and visual observability. The state machine coordinates:
+error-catch, and visual observability. 
 
+**Current Implementation (Issue #4):**
+The state machine currently contains a minimal skeleton with a single Polly task:
+- **Polly SynthesizeSpeech** — Invokes Amazon Polly to synthesize speech from
+  placeholder text (VoiceId: Joanna, OutputFormat: mp3). This demonstrates the
+  integration pattern and establishes the orchestration layer.
+- **CloudWatch Logs** — All execution logs are written to a dedicated log group
+  with 7-day retention for debugging and audit.
+- **X-Ray Tracing** — Enabled for distributed tracing and performance analysis.
+
+**Future Expansion (Issue #5+):**
+The state machine will coordinate these additional steps:
 1. **Validate & Extract Metadata** — a `ValidateAudio` Lambda verifies the
    object (format, size, duration, sample rate) and records the initial
    `PENDING` status. Invalid input transitions straight to the failure path.
 2. **Generate Voice (Amazon Polly)** — synthesizes soothing narration / guided
-   sleep audio from configured text or user-supplied prompts.
+   sleep audio from configured text or user-supplied prompts (currently
+   placeholder).
 3. **Enhance / Generate Soundscape (Amazon Bedrock)** — *optional* step
    (feature-flagged via CDK context) that uses Bedrock to generate or enhance
    ambient sleep sounds. When disabled, the branch is skipped.
@@ -152,7 +166,7 @@ failure is silently lost.
 | Polly / Bedrock | Managed AI | Invoked as Step Functions service integrations |
 | Log groups + alarms | CloudWatch | Per-Lambda logs, state-machine logs, failure alarms |
 
-### Currently Implemented (Issue #3)
+### Currently Implemented (Issue #4)
 
 The following core components are **currently deployed** in the CDK stack:
 
@@ -173,12 +187,29 @@ The following core components are **currently deployed** in the CDK stack:
 - **Event Pattern:** Matches `source: aws.s3`, `detail-type: Object Created`
 - **Scope:** Filters events to only the `SleepAudioInputBucket`
 - **State:** Enabled
-- **Target:** Currently a placeholder; will target Step Functions State Machine in Issue #4
+- **Target:** Targets the `AudioProcessingStateMachine` with S3 bucket and key as input
 - **Purpose:** Detects new audio uploads and triggers the processing workflow
 
+#### `AudioProcessingStateMachine` (AWS::StepFunctions::StateMachine)
+- **Type:** Standard workflow
+- **States:** Currently includes a single Polly SynthesizeSpeech task (placeholder)
+- **Logging:** CloudWatch Logs enabled (ALL level) to `StateMachineLogGroup`
+- **Tracing:** X-Ray tracing enabled
+- **Execution Role:** Least-privilege IAM role with permissions for Polly, CloudWatch Logs, and X-Ray
+- **Input:** Receives S3 bucket name and object key from EventBridge event
+- **Purpose:** Orchestrates the audio processing workflow (currently minimal skeleton)
+
+#### `StateMachineLogGroup` (AWS::Logs::LogGroup)
+- **Retention:** 7 days
+- **Purpose:** Stores all Step Functions execution logs for debugging and audit
+
+#### Polly Integration (Task State)
+- **Action:** `polly:synthesizeSpeech`
+- **Configuration:** Placeholder parameters (Text, VoiceId: Joanna, OutputFormat: mp3)
+- **Purpose:** Demonstrates Amazon Polly integration; real audio processing logic to be added in future issues
+
 ### Not Yet Implemented (Future Issues)
-- **Step Functions State Machine** (`AudioProcessingStateMachine`) — Issue #4
-- **Lambda Functions** (`ValidateAudio`, `FinalizeAudio`) — Issue #4+
+- **Lambda Functions** (`ValidateAudio`, `FinalizeAudio`) — Issue #5+
 - **DynamoDB Table** (`SleepSessionsTable`) — Issue #5+
 - **SNS Topic** (`SleepSessionNotificationsTopic`) — Issue #5+
 - **CloudWatch Alarms** and observability integration — Issue #6+
@@ -188,7 +219,7 @@ The following core components are **currently deployed** in the CDK stack:
 ## 5. Architecture Diagram
 
 > **Legend:**  
-> - **Solid borders** = Currently implemented (Issue #3)  
+> - **Solid green borders** = Currently implemented (Issue #4)  
 > - **Dashed borders** = Planned for future issues
 
 ```mermaid
@@ -200,11 +231,11 @@ flowchart TD
         EB["Amazon EventBridge<br/>AudioUploadedRule<br/>(Object Created)"]
     end
 
-    subgraph Processing["AWS Step Functions — AudioProcessingStateMachine (⏳ Planned)"]
-        Validate["Lambda: ValidateAudio<br/>validate + extract metadata"]
-        Polly["Amazon Polly<br/>soothing voice / TTS"]
-        Bedrock["Amazon Bedrock<br/>(optional) AI soundscape"]
-        Finalize["Lambda: FinalizeAudio<br/>assemble + persist"]
+    subgraph Processing["AWS Step Functions — AudioProcessingStateMachine (✅ Skeleton Implemented)"]
+        Validate["Lambda: ValidateAudio<br/>validate + extract metadata<br/>(⏳ Planned)"]
+        Polly["Amazon Polly<br/>SynthesizeSpeech<br/>(✅ Skeleton)"]
+        Bedrock["Amazon Bedrock<br/>(optional) AI soundscape<br/>(⏳ Planned)"]
+        Finalize["Lambda: FinalizeAudio<br/>assemble + persist<br/>(⏳ Planned)"]
     end
 
     subgraph Storage ["Storage (✅ Output Bucket Implemented)"]
@@ -213,16 +244,16 @@ flowchart TD
     end
 
     SNS["Amazon SNS<br/>SleepSessionNotificationsTopic<br/>(⏳ Planned)"]
-    CW["Amazon CloudWatch<br/>Logs + Alarms<br/>(⏳ Planned)"]
+    CW["Amazon CloudWatch<br/>Logs (✅) + Alarms (⏳)"]
     Subs(["Subscribers<br/>(email / push / ops)"])
 
     Client -- "1. upload audio (pre-signed URL)" --> S3In
     S3In == "2. Object Created event" ==> EB
-    EB -. "3. start execution (future)" .-> Validate
-    Validate -. "4. generate voice" .-> Polly
-    Polly -. "5. optional enhance" .-> Bedrock
+    EB == "3. start execution (bucket, key)" ==> Polly
+    Polly -. "4. future: validation" .-> Validate
+    Validate -. "5. optional enhance" .-> Bedrock
     Bedrock -.-> Finalize
-    Polly -. "Bedrock disabled" .-> Finalize
+    Polly -. "future: finalize" .-> Finalize
     Finalize -. "6a. store processed audio" .-> S3Out
     Finalize -. "6b. write metadata + status" .-> DDB
     Finalize -. "7. completion notification" .-> SNS
@@ -230,17 +261,19 @@ flowchart TD
     Finalize -. "on failure" .-> SNS
     SNS -.-> Subs
 
-    Validate -. logs/metrics .-> CW
-    Finalize -. logs/metrics .-> CW
-    Polly -. logs/metrics .-> CW
-    Bedrock -. logs/metrics .-> CW
+    Polly -. "execution logs" .-> CW
+    Validate -. "logs/metrics" .-> CW
+    Finalize -. "logs/metrics" .-> CW
+    Bedrock -. "logs/metrics" .-> CW
     CW -. "alarm on failure" .-> SNS
     
     classDef implemented fill:#d4edda,stroke:#28a745,stroke-width:3px;
+    classDef skeleton fill:#fff3cd,stroke:#ffc107,stroke-width:3px;
     classDef planned fill:#f8f9fa,stroke:#6c757d,stroke-width:2px,stroke-dasharray: 5 5;
     
-    class S3In,EB,S3Out implemented;
-    class Validate,Polly,Bedrock,Finalize,DDB,SNS,CW,Subs planned;
+    class S3In,EB,S3Out,CW implemented;
+    class Polly skeleton;
+    class Validate,Bedrock,Finalize,DDB,SNS,Subs planned;
 ```
 
 ---

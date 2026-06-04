@@ -3,7 +3,11 @@ package main
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsevents"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awseventstargets"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsstepfunctions"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsstepfunctionstasks"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -34,8 +38,41 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
 	})
 
+	// CloudWatch Log Group for Step Functions state machine
+	logGroup := awslogs.NewLogGroup(stack, jsii.String("StateMachineLogGroup"), &awslogs.LogGroupProps{
+		Retention:         awslogs.RetentionDays_ONE_WEEK,
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+	})
+
+	// Step Functions State Machine - Audio Processing Pipeline
+	// Polly task - synthesizes speech from text (placeholder configuration for now)
+	pollyTask := awsstepfunctionstasks.NewCallAwsService(stack, jsii.String("PollyTask"), &awsstepfunctionstasks.CallAwsServiceProps{
+		Service: jsii.String("polly"),
+		Action:  jsii.String("synthesizeSpeech"),
+		Parameters: &map[string]interface{}{
+			"Text":         jsii.String("This is a placeholder text for sleep audio narration."),
+			"VoiceId":      jsii.String("Joanna"),
+			"OutputFormat": jsii.String("mp3"),
+		},
+		IamResources: jsii.Strings("*"),
+		ResultPath:   jsii.String("$.pollyResult"),
+	})
+
+	// Define the state machine with Polly task
+	stateMachineDefinition := pollyTask
+
+	// Create the state machine
+	stateMachine := awsstepfunctions.NewStateMachine(stack, jsii.String("AudioProcessingStateMachine"), &awsstepfunctions.StateMachineProps{
+		DefinitionBody: awsstepfunctions.DefinitionBody_FromChainable(stateMachineDefinition),
+		Logs: &awsstepfunctions.LogOptions{
+			Destination: logGroup,
+			Level:       awsstepfunctions.LogLevel_ALL,
+		},
+		TracingEnabled: jsii.Bool(true),
+	})
+
 	// EventBridge Rule - triggers on Object Created events from Input Bucket
-	awsevents.NewRule(stack, jsii.String("AudioUploadedRule"), &awsevents.RuleProps{
+	rule := awsevents.NewRule(stack, jsii.String("AudioUploadedRule"), &awsevents.RuleProps{
 		EventPattern: &awsevents.EventPattern{
 			Source:     jsii.Strings("aws.s3"),
 			DetailType: jsii.Strings("Object Created"),
@@ -47,6 +84,14 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		},
 		Enabled: jsii.Bool(true),
 	})
+
+	// Add the state machine as a target for the EventBridge rule
+	rule.AddTarget(awseventstargets.NewSfnStateMachine(stateMachine, &awseventstargets.SfnStateMachineProps{
+		Input: awsevents.RuleTargetInput_FromObject(&map[string]interface{}{
+			"bucket": awsevents.EventField_FromPath(jsii.String("$.detail.bucket.name")),
+			"key":    awsevents.EventField_FromPath(jsii.String("$.detail.object.key")),
+		}),
+	}))
 
 	return stack
 }

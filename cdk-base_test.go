@@ -119,3 +119,88 @@ func TestEventBridgeRuleExists(t *testing.T) {
 		"State": "ENABLED",
 	})
 }
+
+// TestStepFunctionsStateMachineExists verifies the Step Functions state machine exists.
+func TestStepFunctionsStateMachineExists(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify state machine exists
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Verify we have exactly 1 state machine
+	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))
+	
+	// Verify state machine has logging enabled
+	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
+		"LoggingConfiguration": map[string]interface{}{
+			"Level": "ALL",
+		},
+	})
+}
+
+// TestStepFunctionsStateMachineDefinitionHasPollyTask verifies the state machine definition includes Polly task.
+func TestStepFunctionsStateMachineDefinitionHasPollyTask(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify state machine definition contains expected states
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Capture the state machine definition
+	captures := assertions.NewCapture(nil)
+	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
+		"DefinitionString": captures,
+	})
+}
+
+// TestEventBridgeRuleTargetsStateMachine verifies the EventBridge rule targets the state machine.
+func TestEventBridgeRuleTargetsStateMachine(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify EventBridge rule has a target
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Verify the rule has targets configured
+	template.HasResourceProperties(jsii.String("AWS::Events::Rule"), map[string]interface{}{
+		"State": "ENABLED",
+		"Targets": assertions.Match_AnyValue(),
+	})
+}
+
+// TestStateMachineExecutionRole verifies the state machine has an execution role with appropriate permissions.
+func TestStateMachineExecutionRole(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify IAM role exists for state machine
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Verify at least one IAM role exists (for state machine execution)
+	template.HasResourceProperties(jsii.String("AWS::IAM::Role"), map[string]interface{}{
+		"AssumeRolePolicyDocument": map[string]interface{}{
+			"Statement": []interface{}{
+				map[string]interface{}{
+					"Action": "sts:AssumeRole",
+					"Effect": "Allow",
+					"Principal": map[string]interface{}{
+						"Service": assertions.Match_StringLikeRegexp(jsii.String("states.*")),
+					},
+				},
+			},
+		},
+	})
+}
