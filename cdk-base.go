@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsevents"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awseventstargets"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
@@ -38,6 +39,20 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
 	})
 
+	// DynamoDB Table - stores audio pipeline metadata
+	metadataTable := awsdynamodb.NewTable(stack, jsii.String("SleepAudioMetadataTable"), &awsdynamodb.TableProps{
+		PartitionKey: &awsdynamodb.Attribute{
+			Name: jsii.String("audioId"),
+			Type: awsdynamodb.AttributeType_STRING,
+		},
+		BillingMode:              awsdynamodb.BillingMode_PAY_PER_REQUEST,
+		Encryption:               awsdynamodb.TableEncryption_AWS_MANAGED,
+		PointInTimeRecoverySpecification: &awsdynamodb.PointInTimeRecoverySpecification{
+			PointInTimeRecoveryEnabled: jsii.Bool(true),
+		},
+		RemovalPolicy:            awscdk.RemovalPolicy_DESTROY, // For dev/test - change for production
+	})
+
 	// CloudWatch Log Group for Step Functions state machine
 	logGroup := awslogs.NewLogGroup(stack, jsii.String("StateMachineLogGroup"), &awslogs.LogGroupProps{
 		Retention:         awslogs.RetentionDays_ONE_WEEK,
@@ -45,6 +60,28 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 	})
 
 	// Step Functions State Machine - Audio Processing Pipeline
+	
+	// DynamoDB PutItem task - write initial metadata record when pipeline starts
+	putItemTask := awsstepfunctionstasks.NewDynamoPutItem(stack, jsii.String("WriteInitialMetadata"), &awsstepfunctionstasks.DynamoPutItemProps{
+		Table: metadataTable,
+		Item: &map[string]awsstepfunctionstasks.DynamoAttributeValue{
+			"audioId": awsstepfunctionstasks.DynamoAttributeValue_FromString(
+				awsstepfunctions.JsonPath_StringAt(jsii.String("$.key")),
+			),
+			"inputBucket": awsstepfunctionstasks.DynamoAttributeValue_FromString(
+				awsstepfunctions.JsonPath_StringAt(jsii.String("$.bucket")),
+			),
+			"inputKey": awsstepfunctionstasks.DynamoAttributeValue_FromString(
+				awsstepfunctions.JsonPath_StringAt(jsii.String("$.key")),
+			),
+			"status": awsstepfunctionstasks.DynamoAttributeValue_FromString(jsii.String("PROCESSING")),
+			"createdAt": awsstepfunctionstasks.DynamoAttributeValue_FromString(
+				awsstepfunctions.JsonPath_StringAt(jsii.String("$$.State.EnteredTime")),
+			),
+		},
+		ResultPath: jsii.String("$.dynamoResult"),
+	})
+	
 	// Polly task - synthesizes speech from text (placeholder configuration for now)
 	pollyTask := awsstepfunctionstasks.NewCallAwsService(stack, jsii.String("PollyTask"), &awsstepfunctionstasks.CallAwsServiceProps{
 		Service: jsii.String("polly"),
@@ -58,8 +95,8 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		ResultPath:   jsii.String("$.pollyResult"),
 	})
 
-	// Define the state machine with Polly task
-	stateMachineDefinition := pollyTask
+	// Define the state machine with DynamoDB PutItem task followed by Polly task
+	stateMachineDefinition := putItemTask.Next(pollyTask)
 
 	// Create the state machine
 	stateMachine := awsstepfunctions.NewStateMachine(stack, jsii.String("AudioProcessingStateMachine"), &awsstepfunctions.StateMachineProps{
