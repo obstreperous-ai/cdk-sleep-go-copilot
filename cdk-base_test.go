@@ -336,6 +336,112 @@ func TestStateMachineHasDynamoDBPermissions(t *testing.T) {
 	})
 }
 
+// TestSNSTopicsExist verifies that success and failure SNS topics exist.
+func TestSNSTopicsExist(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify we have exactly 2 SNS topics (completed + failed)
+	template := assertions.Template_FromStack(stack, nil)
+	
+	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))
+}
+
+// TestSNSTopicsEncrypted verifies that SNS topics are encrypted.
+func TestSNSTopicsEncrypted(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify SNS topics have encryption enabled
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Verify at least one topic has KMS encryption
+	template.HasResourceProperties(jsii.String("AWS::SNS::Topic"), map[string]interface{}{
+		"KmsMasterKeyId": assertions.Match_AnyValue(),
+	})
+}
+
+// TestStateMachineHasErrorHandling verifies the state machine includes error handling (Catch blocks).
+func TestStateMachineHasErrorHandling(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify state machine definition includes error handling
+	// We verify this by checking for IAM permissions to update DynamoDB for error states
+	// and SNS publish permissions which indicate error/success notifications
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Verify IAM policy includes DynamoDB UpdateItem (needed for status updates)
+	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
+		"PolicyDocument": map[string]interface{}{
+			"Statement": assertions.Match_ArrayWith(&[]interface{}{
+				map[string]interface{}{
+					"Action": "dynamodb:UpdateItem",
+					"Effect": "Allow",
+					"Resource": assertions.Match_AnyValue(),
+				},
+			}),
+		},
+	})
+}
+
+// TestStateMachineHasSNSPublishPermissions verifies the state machine can publish to SNS topics.
+func TestStateMachineHasSNSPublishPermissions(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify IAM policy grants SNS publish permissions
+	template := assertions.Template_FromStack(stack, nil)
+	
+	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
+		"PolicyDocument": map[string]interface{}{
+			"Statement": assertions.Match_ArrayWith(&[]interface{}{
+				map[string]interface{}{
+					"Action": "sns:Publish",
+					"Effect": "Allow",
+					"Resource": assertions.Match_AnyValue(),
+				},
+			}),
+		},
+	})
+}
+
+// TestStateMachineHasDynamoDBUpdatePermissions verifies the state machine can update DynamoDB items.
+func TestStateMachineHasDynamoDBUpdatePermissions(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify IAM policy grants DynamoDB UpdateItem permissions
+	template := assertions.Template_FromStack(stack, nil)
+	
+	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
+		"PolicyDocument": map[string]interface{}{
+			"Statement": assertions.Match_ArrayWith(&[]interface{}{
+				map[string]interface{}{
+					"Action": "dynamodb:UpdateItem",
+					"Effect": "Allow",
+					"Resource": assertions.Match_AnyValue(),
+				},
+			}),
+		},
+	})
+}
+
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || 

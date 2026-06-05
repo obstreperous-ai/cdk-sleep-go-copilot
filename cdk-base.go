@@ -5,8 +5,10 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsevents"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awseventstargets"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awskms"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssns"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsstepfunctions"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsstepfunctionstasks"
 	"github.com/aws/constructs-go/constructs/v10"
@@ -53,6 +55,27 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		RemovalPolicy:            awscdk.RemovalPolicy_DESTROY, // For dev/test - change for production
 	})
 
+	// SNS Topics - for pipeline notifications
+
+	// KMS Key for SNS topic encryption
+	snsKmsKey := awskms.NewKey(stack, jsii.String("SnsTopicKey"), &awskms.KeyProps{
+		Description:      jsii.String("KMS key for SNS topic encryption"),
+		EnableKeyRotation: jsii.Bool(true),
+		RemovalPolicy:    awscdk.RemovalPolicy_DESTROY, // For dev/test - change for production
+	})
+
+	// SNS Topic - pipeline completion notifications
+	completedTopic := awssns.NewTopic(stack, jsii.String("SleepAudioPipelineCompletedTopic"), &awssns.TopicProps{
+		DisplayName:    jsii.String("Sleep Audio Pipeline Completed"),
+		MasterKey:      snsKmsKey,
+	})
+
+	// SNS Topic - pipeline failure notifications
+	failedTopic := awssns.NewTopic(stack, jsii.String("SleepAudioPipelineFailedTopic"), &awssns.TopicProps{
+		DisplayName:    jsii.String("Sleep Audio Pipeline Failed"),
+		MasterKey:      snsKmsKey,
+	})
+
 	// CloudWatch Log Group for Step Functions state machine
 	logGroup := awslogs.NewLogGroup(stack, jsii.String("StateMachineLogGroup"), &awslogs.LogGroupProps{
 		Retention:         awslogs.RetentionDays_ONE_WEEK,
@@ -95,7 +118,91 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		ResultPath:   jsii.String("$.pollyResult"),
 	})
 
-	// Define the state machine with DynamoDB PutItem task followed by Polly task
+	// DynamoDB UpdateItem task - update status to COMPLETED on success
+	updateStatusCompleted := awsstepfunctionstasks.NewDynamoUpdateItem(stack, jsii.String("UpdateStatusCompleted"), &awsstepfunctionstasks.DynamoUpdateItemProps{
+		Table: metadataTable,
+		Key: &map[string]awsstepfunctionstasks.DynamoAttributeValue{
+			"audioId": awsstepfunctionstasks.DynamoAttributeValue_FromString(
+				awsstepfunctions.JsonPath_StringAt(jsii.String("$.key")),
+			),
+		},
+		UpdateExpression: jsii.String("SET #status = :completed, #updatedAt = :timestamp"),
+		ExpressionAttributeNames: &map[string]*string{
+			"#status":    jsii.String("status"),
+			"#updatedAt": jsii.String("updatedAt"),
+		},
+		ExpressionAttributeValues: &map[string]awsstepfunctionstasks.DynamoAttributeValue{
+			":completed": awsstepfunctionstasks.DynamoAttributeValue_FromString(jsii.String("COMPLETED")),
+			":timestamp": awsstepfunctionstasks.DynamoAttributeValue_FromString(
+				awsstepfunctions.JsonPath_StringAt(jsii.String("$$.State.EnteredTime")),
+			),
+		},
+		ResultPath: jsii.String("$.updateResult"),
+	})
+
+	// SNS Publish task - send completion notification
+	publishCompletedNotification := awsstepfunctionstasks.NewSnsPublish(stack, jsii.String("PublishCompletedNotification"), &awsstepfunctionstasks.SnsPublishProps{
+		Topic:   completedTopic,
+		Message: awsstepfunctions.TaskInput_FromObject(&map[string]interface{}{
+			"status": "COMPLETED",
+			"audioId": awsstepfunctions.JsonPath_StringAt(jsii.String("$.key")),
+			"bucket":  awsstepfunctions.JsonPath_StringAt(jsii.String("$.bucket")),
+			"message": "Audio processing pipeline completed successfully",
+		}),
+		Subject:    jsii.String("Audio Pipeline Completed"),
+		ResultPath: jsii.String("$.notificationResult"),
+	})
+
+	// DynamoDB UpdateItem task - update status to FAILED on error
+	updateStatusFailed := awsstepfunctionstasks.NewDynamoUpdateItem(stack, jsii.String("UpdateStatusFailed"), &awsstepfunctionstasks.DynamoUpdateItemProps{
+		Table: metadataTable,
+		Key: &map[string]awsstepfunctionstasks.DynamoAttributeValue{
+			"audioId": awsstepfunctionstasks.DynamoAttributeValue_FromString(
+				awsstepfunctions.JsonPath_StringAt(jsii.String("$.key")),
+			),
+		},
+		UpdateExpression: jsii.String("SET #status = :failed, #updatedAt = :timestamp, #error = :errorMsg"),
+		ExpressionAttributeNames: &map[string]*string{
+			"#status":    jsii.String("status"),
+			"#updatedAt": jsii.String("updatedAt"),
+			"#error":     jsii.String("errorMessage"),
+		},
+		ExpressionAttributeValues: &map[string]awsstepfunctionstasks.DynamoAttributeValue{
+			":failed":    awsstepfunctionstasks.DynamoAttributeValue_FromString(jsii.String("FAILED")),
+			":timestamp": awsstepfunctionstasks.DynamoAttributeValue_FromString(
+				awsstepfunctions.JsonPath_StringAt(jsii.String("$$.State.EnteredTime")),
+			),
+			":errorMsg": awsstepfunctionstasks.DynamoAttributeValue_FromString(
+				awsstepfunctions.JsonPath_StringAt(jsii.String("$.errorMessage")),
+			),
+		},
+		ResultPath: jsii.String("$.updateResult"),
+	})
+
+	// SNS Publish task - send failure notification
+	publishFailedNotification := awsstepfunctionstasks.NewSnsPublish(stack, jsii.String("PublishFailedNotification"), &awsstepfunctionstasks.SnsPublishProps{
+		Topic:   failedTopic,
+		Message: awsstepfunctions.TaskInput_FromObject(&map[string]interface{}{
+			"status": "FAILED",
+			"audioId": awsstepfunctions.JsonPath_StringAt(jsii.String("$.key")),
+			"bucket":  awsstepfunctions.JsonPath_StringAt(jsii.String("$.bucket")),
+			"error":   awsstepfunctions.JsonPath_StringAt(jsii.String("$.errorMessage")),
+			"message": "Audio processing pipeline failed",
+		}),
+		Subject:    jsii.String("Audio Pipeline Failed"),
+		ResultPath: jsii.String("$.notificationResult"),
+	})
+
+	// Define error handling path: update status to FAILED then send notification
+	errorHandlingChain := updateStatusFailed.Next(publishFailedNotification)
+
+	// Add error handling to the Polly task
+	pollyTask.AddCatch(errorHandlingChain, &awsstepfunctions.CatchProps{
+		Errors: jsii.Strings("States.ALL"),
+		ResultPath: jsii.String("$.errorInfo"),
+	}).Next(updateStatusCompleted).Next(publishCompletedNotification)
+
+	// Define the state machine starting with DynamoDB PutItem task
 	stateMachineDefinition := putItemTask.Next(pollyTask)
 
 	// Create the state machine
