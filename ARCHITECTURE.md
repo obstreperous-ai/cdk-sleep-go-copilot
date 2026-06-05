@@ -5,14 +5,16 @@
 > this document (and its Mermaid diagram) in sync with the deployed
 > infrastructure.
 >
-> **Implementation Status (as of Issue #4):** 
+> **Implementation Status (as of Issue #5):** 
 > - ✅ Core S3 Buckets (Input & Output) with encryption, versioning
 > - ✅ EventBridge Rule for Object Created events
 > - ✅ Step Functions State Machine (AudioProcessingStateMachine) with CloudWatch Logs
 > - ✅ Amazon Polly integration (SynthesizeSpeech task) - skeleton/placeholder
-> - ⏳ Lambda Functions (ValidateAudio, FinalizeAudio) - planned for Issue #5+
-> - ⏳ DynamoDB Table, SNS Topic - planned for Issue #5+
-> - ⏳ CloudWatch Alarms - planned for Issue #6+
+> - ✅ DynamoDB Table (SleepAudioMetadataTable) for audio pipeline metadata
+> - ✅ State Machine DynamoDB integration (PutItem task for initial metadata)
+> - ⏳ Lambda Functions (ValidateAudio, FinalizeAudio) - planned for Issue #6+
+> - ⏳ SNS Topic - planned for Issue #6+
+> - ⏳ CloudWatch Alarms - planned for Issue #7+
 
 ---
 
@@ -76,28 +78,34 @@ Functions, Standard workflow). Step Functions is preferred over a single Lambda
 because the work is multi-step, long-running, and benefits from built-in retry,
 error-catch, and visual observability. 
 
-**Current Implementation (Issue #4):**
-The state machine currently contains a minimal skeleton with a single Polly task:
-- **Polly SynthesizeSpeech** — Invokes Amazon Polly to synthesize speech from
-  placeholder text (VoiceId: Joanna, OutputFormat: mp3). This demonstrates the
-  integration pattern and establishes the orchestration layer.
-- **CloudWatch Logs** — All execution logs are written to a dedicated log group
-  with 7-day retention for debugging and audit.
-- **X-Ray Tracing** — Enabled for distributed tracing and performance analysis.
+**Current Implementation (Issue #5):**
+The state machine orchestrates the following workflow:
+1. **Write Initial Metadata (DynamoDB PutItem)** — Records the initial metadata to
+   the `SleepAudioMetadataTable` when processing begins. The record includes:
+   - `audioId`: The S3 object key (partition key)
+   - `inputBucket`: Source S3 bucket name
+   - `inputKey`: Source S3 object key
+   - `status`: Set to "PROCESSING" 
+   - `createdAt`: Timestamp when processing started
+2. **Polly SynthesizeSpeech** — Invokes Amazon Polly to synthesize speech from
+   placeholder text (VoiceId: Joanna, OutputFormat: mp3). This demonstrates the
+   integration pattern and establishes the orchestration layer.
+3. **CloudWatch Logs** — All execution logs are written to a dedicated log group
+   with 7-day retention for debugging and audit.
+4. **X-Ray Tracing** — Enabled for distributed tracing and performance analysis.
 
-**Future Expansion (Issue #5+):**
+**Future Expansion (Issue #6+):**
 The state machine will coordinate these additional steps:
 1. **Validate & Extract Metadata** — a `ValidateAudio` Lambda verifies the
-   object (format, size, duration, sample rate) and records the initial
-   `PENDING` status. Invalid input transitions straight to the failure path.
-2. **Generate Voice (Amazon Polly)** — synthesizes soothing narration / guided
-   sleep audio from configured text or user-supplied prompts (currently
-   placeholder).
+   object (format, size, duration, sample rate). Invalid input transitions 
+   straight to the failure path.
+2. **Generate Voice (Amazon Polly)** — continues to synthesize soothing narration /
+   guided sleep audio from configured text or user-supplied prompts.
 3. **Enhance / Generate Soundscape (Amazon Bedrock)** — *optional* step
    (feature-flagged via CDK context) that uses Bedrock to generate or enhance
    ambient sleep sounds. When disabled, the branch is skipped.
 4. **Assemble & Store** — a `FinalizeAudio` Lambda writes the processed audio to
-   the output bucket and the final metadata to DynamoDB.
+   the output bucket and updates the final metadata in DynamoDB (status: COMPLETED/FAILED).
 
 Each task state defines explicit `Retry` and `Catch` rules; any unhandled error
 routes to the **failure-notification** state.
@@ -111,11 +119,22 @@ and encrypted at rest.
 
 ### Stage 5 — Store Metadata (DynamoDB)
 
-Structured session metadata is persisted to the **`SleepSessionsTable`**
-DynamoDB table — `user_id`, `session_id`, `duration`, `processing_status`,
-`input_key`, `output_key`, and timestamps. Partition key: `user_id`; sort key:
-`session_id`. The table uses on-demand (pay-per-request) billing to match the
-spiky, event-driven workload.
+**Current Implementation (Issue #5):**
+Audio processing metadata is persisted to the **`SleepAudioMetadataTable`**
+DynamoDB table at the beginning of each workflow execution. The table schema:
+- **Partition Key:** `audioId` (string) — the S3 object key identifying the audio file
+- **Attributes:** `inputBucket`, `inputKey`, `status`, `createdAt`, `updatedAt`
+- **Billing Mode:** On-demand (PAY_PER_REQUEST) to match spiky, event-driven workload
+- **Encryption:** AWS-managed server-side encryption (SSE) enabled
+- **Point-in-Time Recovery:** Enabled for data durability and recovery
+
+The state machine writes an initial record with status "PROCESSING" when the workflow
+starts. Future enhancements will update the status to "COMPLETED" or "FAILED" upon
+completion.
+
+**Future Expansion (Issue #6+):**
+The schema may be extended to include additional session metadata such as `user_id`,
+`session_id`, `duration`, `output_key`, and richer processing details.
 
 ### Stage 6 — Notify (SNS)
 
@@ -157,16 +176,16 @@ failure is silently lost.
 |---|---|---|
 | `SleepAudioInputBucket` | S3 | Private, encrypted, public access blocked; EventBridge notifications enabled |
 | `AudioUploadedRule` | EventBridge Rule | Matches `Object Created` on the input bucket; targets the state machine |
-| `AudioProcessingStateMachine` | Step Functions (Standard) | Orchestrates validation, Polly, optional Bedrock, finalize |
-| `ValidateAudio` | Lambda | Format/size/duration validation + metadata extraction |
-| `FinalizeAudio` | Lambda | Writes processed audio to output bucket and metadata to DynamoDB |
+| `AudioProcessingStateMachine` | Step Functions (Standard) | Orchestrates DynamoDB writes, Polly, optional Bedrock, finalize |
+| `SleepAudioMetadataTable` | DynamoDB | PK `audioId`; stores pipeline metadata; on-demand billing |
+| `ValidateAudio` | Lambda | Format/size/duration validation + metadata extraction (**⏳ Planned**) |
+| `FinalizeAudio` | Lambda | Writes processed audio to output bucket and updates metadata (**⏳ Planned**) |
 | `SleepAudioOutputBucket` | S3 | Private, encrypted, **versioning enabled** |
-| `SleepSessionsTable` | DynamoDB | PK `user_id`, SK `session_id`; on-demand billing |
-| `SleepSessionNotificationsTopic` | SNS | Completion + error notifications |
+| `SleepSessionNotificationsTopic` | SNS | Completion + error notifications (**⏳ Planned**) |
 | Polly / Bedrock | Managed AI | Invoked as Step Functions service integrations |
 | Log groups + alarms | CloudWatch | Per-Lambda logs, state-machine logs, failure alarms |
 
-### Currently Implemented (Issue #4)
+### Currently Implemented (Issue #5)
 
 The following core components are **currently deployed** in the CDK stack:
 
@@ -192,12 +211,22 @@ The following core components are **currently deployed** in the CDK stack:
 
 #### `AudioProcessingStateMachine` (AWS::StepFunctions::StateMachine)
 - **Type:** Standard workflow
-- **States:** Currently includes a single Polly SynthesizeSpeech task (placeholder)
+- **States:** 
+  1. **WriteInitialMetadata** — DynamoDB PutItem task that writes initial metadata record
+  2. **PollyTask** — SynthesizeSpeech task (placeholder)
 - **Logging:** CloudWatch Logs enabled (ALL level) to `StateMachineLogGroup`
 - **Tracing:** X-Ray tracing enabled
-- **Execution Role:** Least-privilege IAM role with permissions for Polly, CloudWatch Logs, and X-Ray
+- **Execution Role:** Least-privilege IAM role with permissions for DynamoDB, Polly, CloudWatch Logs, and X-Ray
 - **Input:** Receives S3 bucket name and object key from EventBridge event
-- **Purpose:** Orchestrates the audio processing workflow (currently minimal skeleton)
+- **Purpose:** Orchestrates the audio processing workflow with metadata tracking
+
+#### `SleepAudioMetadataTable` (AWS::DynamoDB::Table)
+- **Partition Key:** `audioId` (String) — S3 object key identifying the audio file
+- **Billing Mode:** PAY_PER_REQUEST (on-demand)
+- **Encryption:** AWS-managed SSE enabled
+- **Point-in-Time Recovery:** Enabled
+- **Attributes Stored:** `audioId`, `inputBucket`, `inputKey`, `status`, `createdAt`
+- **Purpose:** Tracks audio processing pipeline metadata from start to completion
 
 #### `StateMachineLogGroup` (AWS::Logs::LogGroup)
 - **Retention:** 7 days
@@ -208,18 +237,23 @@ The following core components are **currently deployed** in the CDK stack:
 - **Configuration:** Placeholder parameters (Text, VoiceId: Joanna, OutputFormat: mp3)
 - **Purpose:** Demonstrates Amazon Polly integration; real audio processing logic to be added in future issues
 
+#### DynamoDB PutItem Integration (Task State)
+- **Action:** `dynamodb:PutItem`
+- **Table:** `SleepAudioMetadataTable`
+- **Item:** Writes initial metadata including audioId, inputBucket, inputKey, status (PROCESSING), createdAt
+- **Purpose:** Tracks pipeline execution state from the beginning of workflow
+
 ### Not Yet Implemented (Future Issues)
-- **Lambda Functions** (`ValidateAudio`, `FinalizeAudio`) — Issue #5+
-- **DynamoDB Table** (`SleepSessionsTable`) — Issue #5+
-- **SNS Topic** (`SleepSessionNotificationsTopic`) — Issue #5+
-- **CloudWatch Alarms** and observability integration — Issue #6+
+- **Lambda Functions** (`ValidateAudio`, `FinalizeAudio`) — Issue #6+
+- **SNS Topic** (`SleepSessionNotificationsTopic`) — Issue #6+
+- **CloudWatch Alarms** and observability integration — Issue #7+
 
 ---
 
 ## 5. Architecture Diagram
 
 > **Legend:**  
-> - **Solid green borders** = Currently implemented (Issue #4)  
+> - **Solid green borders** = Currently implemented (Issue #5)  
 > - **Dashed borders** = Planned for future issues
 
 ```mermaid
@@ -231,16 +265,17 @@ flowchart TD
         EB["Amazon EventBridge<br/>AudioUploadedRule<br/>(Object Created)"]
     end
 
-    subgraph Processing["AWS Step Functions — AudioProcessingStateMachine (✅ Skeleton Implemented)"]
+    subgraph Processing["AWS Step Functions — AudioProcessingStateMachine (✅ Partially Implemented)"]
+        WriteMeta["DynamoDB: WriteInitialMetadata<br/>PutItem task<br/>(✅ Implemented)"]
         Validate["Lambda: ValidateAudio<br/>validate + extract metadata<br/>(⏳ Planned)"]
         Polly["Amazon Polly<br/>SynthesizeSpeech<br/>(✅ Skeleton)"]
         Bedrock["Amazon Bedrock<br/>(optional) AI soundscape<br/>(⏳ Planned)"]
         Finalize["Lambda: FinalizeAudio<br/>assemble + persist<br/>(⏳ Planned)"]
     end
 
-    subgraph Storage ["Storage (✅ Output Bucket Implemented)"]
+    subgraph Storage ["Storage (✅ Output Bucket + DynamoDB Implemented)"]
         S3Out["Amazon S3<br/>Output Bucket<br/>(versioning enabled, encrypted)"]
-        DDB["Amazon DynamoDB<br/>SleepSessionsTable<br/>(⏳ Planned)"]
+        DDB["Amazon DynamoDB<br/>SleepAudioMetadataTable<br/>(✅ Implemented)"]
     end
 
     SNS["Amazon SNS<br/>SleepSessionNotificationsTopic<br/>(⏳ Planned)"]
@@ -249,8 +284,10 @@ flowchart TD
 
     Client -- "1. upload audio (pre-signed URL)" --> S3In
     S3In == "2. Object Created event" ==> EB
-    EB == "3. start execution (bucket, key)" ==> Polly
-    Polly -. "4. future: validation" .-> Validate
+    EB == "3. start execution (bucket, key)" ==> WriteMeta
+    WriteMeta -- "4. write initial metadata" --> DDB
+    WriteMeta --> Polly
+    Polly -. "5. future: validation" .-> Validate
     Validate -. "5. optional enhance" .-> Bedrock
     Bedrock -.-> Finalize
     Polly -. "future: finalize" .-> Finalize
