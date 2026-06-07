@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsevents"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awseventstargets"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awskms"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssns"
@@ -55,6 +56,23 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		RemovalPolicy:            awscdk.RemovalPolicy_DESTROY, // For dev/test - change for production
 	})
 
+	// Lambda Function - Audio Processor
+	// This Lambda validates audio files and extracts metadata before processing
+	audioProcessorFunction := awslambda.NewFunction(stack, jsii.String("SleepAudioProcessor"), &awslambda.FunctionProps{
+		Runtime: awslambda.Runtime_PROVIDED_AL2023(),
+		Handler: jsii.String("bootstrap"),
+		Code:    awslambda.Code_FromAsset(jsii.String("lambda/audio-processor"), nil),
+		Environment: &map[string]*string{
+			"TABLE_NAME": metadataTable.TableName(),
+		},
+		Timeout: awscdk.Duration_Minutes(jsii.Number(1)),
+		MemorySize: jsii.Number(256),
+		Description: jsii.String("Validates audio files and extracts metadata for the sleep audio pipeline"),
+	})
+
+	// Grant the Lambda function read access to DynamoDB
+	metadataTable.GrantReadData(audioProcessorFunction)
+
 	// SNS Topics - for pipeline notifications
 
 	// KMS Key for SNS topic encryption
@@ -103,6 +121,13 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			),
 		},
 		ResultPath: jsii.String("$.dynamoResult"),
+	})
+	
+	// Lambda invocation task - process and validate audio file
+	processAudioTask := awsstepfunctionstasks.NewLambdaInvoke(stack, jsii.String("ProcessAudioFile"), &awsstepfunctionstasks.LambdaInvokeProps{
+		LambdaFunction: audioProcessorFunction,
+		ResultPath:     jsii.String("$.processorResult"),
+		PayloadResponseOnly: jsii.Bool(true),
 	})
 	
 	// Polly task - synthesizes speech from text (placeholder configuration for now)
@@ -202,8 +227,8 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		ResultPath: jsii.String("$.errorInfo"),
 	}).Next(updateStatusCompleted).Next(publishCompletedNotification)
 
-	// Define the state machine starting with DynamoDB PutItem task
-	stateMachineDefinition := putItemTask.Next(pollyTask)
+	// Define the state machine starting with DynamoDB PutItem, then Lambda processing, then Polly
+	stateMachineDefinition := putItemTask.Next(processAudioTask).Next(pollyTask)
 
 	// Create the state machine
 	stateMachine := awsstepfunctions.NewStateMachine(stack, jsii.String("AudioProcessingStateMachine"), &awsstepfunctions.StateMachineProps{

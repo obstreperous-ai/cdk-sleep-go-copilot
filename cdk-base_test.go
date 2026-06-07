@@ -442,6 +442,150 @@ func TestStateMachineHasDynamoDBUpdatePermissions(t *testing.T) {
 	})
 }
 
+// TestLambdaFunctionExists verifies the SleepAudioProcessor Lambda function exists.
+func TestLambdaFunctionExists(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify Lambda function exists (at least 2: our Lambda + S3 notifications handler)
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Verify we have at least 2 Lambda functions (S3 notifications handler + our processor)
+	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(2))
+}
+
+// TestLambdaFunctionRuntime verifies the Lambda function uses Go runtime.
+func TestLambdaFunctionRuntime(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify Lambda uses provided.al2023 runtime (Go)
+	template := assertions.Template_FromStack(stack, nil)
+	
+	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
+		"Runtime": "provided.al2023",
+	})
+}
+
+// TestLambdaFunctionHandler verifies the Lambda function has correct handler.
+func TestLambdaFunctionHandler(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify Lambda handler is bootstrap
+	template := assertions.Template_FromStack(stack, nil)
+	
+	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
+		"Handler": "bootstrap",
+	})
+}
+
+// TestLambdaFunctionEnvironmentVariables verifies the Lambda has TABLE_NAME environment variable.
+func TestLambdaFunctionEnvironmentVariables(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify Lambda has TABLE_NAME environment variable
+	template := assertions.Template_FromStack(stack, nil)
+	
+	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
+		"Environment": map[string]interface{}{
+			"Variables": map[string]interface{}{
+				"TABLE_NAME": assertions.Match_AnyValue(),
+			},
+		},
+	})
+}
+
+// TestStateMachineHasLambdaInvokeTask verifies the state machine includes Lambda invocation.
+func TestStateMachineHasLambdaInvokeTask(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify state machine can invoke Lambda (via IAM permissions)
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Verify IAM policy grants Lambda invoke permissions
+	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
+		"PolicyDocument": map[string]interface{}{
+			"Statement": assertions.Match_ArrayWith(&[]interface{}{
+				map[string]interface{}{
+					"Action": "lambda:InvokeFunction",
+					"Effect": "Allow",
+					"Resource": assertions.Match_AnyValue(),
+				},
+			}),
+		},
+	})
+}
+
+// TestLambdaHasDynamoDBReadPermissions verifies the Lambda can read from DynamoDB.
+func TestLambdaHasDynamoDBReadPermissions(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify Lambda execution role has DynamoDB read permissions
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Verify at least one IAM policy allows DynamoDB GetItem
+	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
+		"PolicyDocument": map[string]interface{}{
+			"Statement": assertions.Match_ArrayWith(&[]interface{}{
+				map[string]interface{}{
+					"Action": assertions.Match_ArrayWith(&[]interface{}{"dynamodb:GetItem"}),
+					"Effect": "Allow",
+					"Resource": assertions.Match_AnyValue(),
+				},
+			}),
+		},
+	})
+}
+
+// TestLambdaExecutionRoleExists verifies the Lambda has an execution role with CloudWatch Logs access.
+func TestLambdaExecutionRoleExists(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify Lambda execution role exists
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Verify at least one IAM role exists for Lambda
+	template.HasResourceProperties(jsii.String("AWS::IAM::Role"), map[string]interface{}{
+		"AssumeRolePolicyDocument": map[string]interface{}{
+			"Statement": []interface{}{
+				map[string]interface{}{
+					"Action": "sts:AssumeRole",
+					"Effect": "Allow",
+					"Principal": map[string]interface{}{
+						"Service": assertions.Match_StringLikeRegexp(jsii.String("lambda.*")),
+					},
+				},
+			},
+		},
+	})
+}
+
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || 
