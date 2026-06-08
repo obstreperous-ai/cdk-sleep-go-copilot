@@ -102,6 +102,21 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 
 	// Step Functions State Machine - Audio Processing Pipeline
 	
+	// Pass state to set error message for missing input validation
+	invalidInputError := awsstepfunctions.NewPass(stack, jsii.String("InvalidInputError"), &awsstepfunctions.PassProps{
+		Parameters: &map[string]interface{}{
+			"errorMessage": jsii.String("Invalid input: bucket and key are required"),
+			"bucket":       awsstepfunctions.JsonPath_StringAt(jsii.String("$.bucket")),
+			"key":          awsstepfunctions.JsonPath_StringAt(jsii.String("$.key")),
+		},
+		ResultPath: jsii.String("$"),
+	})
+	
+	// Choice state for input validation - check if bucket and key exist
+	validateInputChoice := awsstepfunctions.NewChoice(stack, jsii.String("ValidateInput"), &awsstepfunctions.ChoiceProps{
+		Comment: jsii.String("Validate that bucket and key are present in the input"),
+	})
+	
 	// DynamoDB PutItem task - write initial metadata record when pipeline starts
 	putItemTask := awsstepfunctionstasks.NewDynamoPutItem(stack, jsii.String("WriteInitialMetadata"), &awsstepfunctionstasks.DynamoPutItemProps{
 		Table: metadataTable,
@@ -128,6 +143,14 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		LambdaFunction: audioProcessorFunction,
 		ResultPath:     jsii.String("$.processorResult"),
 		PayloadResponseOnly: jsii.Bool(true),
+	})
+	
+	// Pass state to format Lambda errors for the error handling chain
+	formatLambdaError := awsstepfunctions.NewPass(stack, jsii.String("FormatLambdaError"), &awsstepfunctions.PassProps{
+		Parameters: &map[string]interface{}{
+			"errorMessage": awsstepfunctions.JsonPath_StringAt(jsii.String("$.errorInfo.Error")),
+		},
+		ResultPath: jsii.String("$"),
 	})
 	
 	// Polly task - synthesizes speech from text (placeholder configuration for now)
@@ -218,17 +241,37 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		ResultPath: jsii.String("$.notificationResult"),
 	})
 
-	// Define error handling path: update status to FAILED then send notification
-	errorHandlingChain := updateStatusFailed.Next(publishFailedNotification)
-
+	// Define error handling path: format error, update status to FAILED, then send notification
+	lambdaErrorChain := formatLambdaError.Next(updateStatusFailed).Next(publishFailedNotification)
+	
+	// Wire up invalid input error path
+	invalidInputError.Next(publishFailedNotification)
+	
+	// Add error handling to the Lambda task (for validation errors)
+	processAudioTask.AddCatch(lambdaErrorChain, &awsstepfunctions.CatchProps{
+		Errors: jsii.Strings("States.ALL"),
+		ResultPath: jsii.String("$.errorInfo"),
+	})
+	
 	// Add error handling to the Polly task
-	pollyTask.AddCatch(errorHandlingChain, &awsstepfunctions.CatchProps{
+	pollyTask.AddCatch(lambdaErrorChain, &awsstepfunctions.CatchProps{
 		Errors: jsii.Strings("States.ALL"),
 		ResultPath: jsii.String("$.errorInfo"),
 	}).Next(updateStatusCompleted).Next(publishCompletedNotification)
+	
+	// Wire up the Choice state for input validation
+	// Check if both bucket and key are present (not null and have a length > 0)
+	validateInputChoice.When(
+		awsstepfunctions.Condition_And(
+			awsstepfunctions.Condition_IsPresent(jsii.String("$.bucket")),
+			awsstepfunctions.Condition_IsPresent(jsii.String("$.key")),
+		),
+		putItemTask.Next(processAudioTask).Next(pollyTask),
+		nil,
+	).Otherwise(invalidInputError)
 
-	// Define the state machine starting with DynamoDB PutItem, then Lambda processing, then Polly
-	stateMachineDefinition := putItemTask.Next(processAudioTask).Next(pollyTask)
+	// Define the state machine starting with input validation
+	stateMachineDefinition := validateInputChoice
 
 	// Create the state machine
 	stateMachine := awsstepfunctions.NewStateMachine(stack, jsii.String("AudioProcessingStateMachine"), &awsstepfunctions.StateMachineProps{
