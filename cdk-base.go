@@ -27,12 +27,33 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 	}
 	stack := awscdk.NewStack(scope, &id, &sprops)
 
+	// Determine environment from CDK context (dev, stage, prod)
+	// Default to dev if not specified
+	envContext := "dev"
+	if stack.Node().TryGetContext(jsii.String("env")) != nil {
+		if envStr, ok := stack.Node().TryGetContext(jsii.String("env")).(string); ok {
+			envContext = envStr
+		}
+	}
+	
+	// Set removal policy based on environment
+	// dev: DESTROY for easy cleanup
+	// stage/prod: RETAIN for data safety
+	var removalPolicy awscdk.RemovalPolicy
+	if envContext == "dev" {
+		removalPolicy = awscdk.RemovalPolicy_DESTROY
+	} else {
+		removalPolicy = awscdk.RemovalPolicy_RETAIN
+	}
+
 	// Input S3 Bucket - receives raw audio uploads
 	inputBucket := awss3.NewBucket(stack, jsii.String("SleepAudioInputBucket"), &awss3.BucketProps{
 		Encryption:        awss3.BucketEncryption_S3_MANAGED,
 		Versioned:         jsii.Bool(true),
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
 		EventBridgeEnabled: jsii.Bool(true),
+		RemovalPolicy:     removalPolicy,
+		AutoDeleteObjects: jsii.Bool(envContext == "dev"), // Only auto-delete in dev
 	})
 
 	// Output S3 Bucket - stores processed audio
@@ -40,6 +61,8 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		Encryption:        awss3.BucketEncryption_S3_MANAGED,
 		Versioned:         jsii.Bool(true),
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
+		RemovalPolicy:     removalPolicy,
+		AutoDeleteObjects: jsii.Bool(envContext == "dev"), // Only auto-delete in dev
 	})
 
 	// DynamoDB Table - stores audio pipeline metadata
@@ -53,7 +76,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		PointInTimeRecoverySpecification: &awsdynamodb.PointInTimeRecoverySpecification{
 			PointInTimeRecoveryEnabled: jsii.Bool(true),
 		},
-		RemovalPolicy:            awscdk.RemovalPolicy_DESTROY, // For dev/test - change for production
+		RemovalPolicy:            removalPolicy,
 	})
 
 	// Lambda Function - Audio Processor
