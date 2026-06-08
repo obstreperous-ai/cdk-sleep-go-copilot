@@ -5,7 +5,7 @@
 > this document (and its Mermaid diagram) in sync with the deployed
 > infrastructure.
 >
-> **Implementation Status (as of Issue #8):** 
+> **Implementation Status (as of Issue #9):** 
 > - ✅ Core S3 Buckets (Input & Output) with encryption, versioning
 > - ✅ EventBridge Rule for Object Created events
 > - ✅ Step Functions State Machine (AudioProcessingStateMachine) with CloudWatch Logs
@@ -20,7 +20,11 @@
 > - ✅ DynamoDB status updates (UpdateItem tasks) on success and failure paths
 > - ✅ **Complete end-to-end wiring** from S3 upload to notifications
 > - ✅ Lambda Functions (SleepAudioProcessor with validation) - **Issue #7 & #8**
-> - ⏳ CloudWatch Alarms - planned for Issue #9+
+> - ✅ **Multi-environment support** (dev/stage/prod) with context-driven configuration - **Issue #9**
+> - ✅ **Environment-specific removal policies** (DESTROY for dev, RETAIN for stage/prod) - **Issue #9**
+> - ✅ **Expanded test coverage** for pipeline integration and validation - **Issue #9**
+> - ⏳ CDK Pipelines construct for CI/CD deployment - planned for Issue #10+
+> - ⏳ CloudWatch Alarms - planned for Issue #10+
 
 ---
 
@@ -492,6 +496,62 @@ flowchart TD
 
 ---
 
+## 5.1. Deployment & Environment Structure
+
+The following diagram illustrates the multi-environment deployment architecture implemented in Issue #9:
+
+```mermaid
+flowchart TB
+    subgraph Source ["Source Control"]
+        GitHub["GitHub Repository<br/>main branch"]
+    end
+    
+    subgraph CI ["Continuous Integration (GitHub Actions)"]
+        Tests["go test ./..."]
+        Synth["cdk synth"]
+        MultiEnv["Multi-environment tests"]
+    end
+    
+    subgraph Environments ["CDK Deployment Targets"]
+        subgraph DevEnv ["Development Environment"]
+            DevStack["CdkBaseStack<br/>env=dev<br/>✅ Auto-delete enabled<br/>✅ DESTROY removal policy"]
+        end
+        
+        subgraph StageEnv ["Staging Environment"]
+            StageStack["CdkBaseStack<br/>env=stage<br/>✅ Data retained<br/>✅ RETAIN removal policy"]
+        end
+        
+        subgraph ProdEnv ["Production Environment"]
+            ProdStack["CdkBaseStack<br/>env=prod<br/>✅ Data retained<br/>✅ RETAIN removal policy"]
+        end
+    end
+    
+    GitHub -->|Push/PR| CI
+    Tests --> Synth
+    Synth --> MultiEnv
+    
+    MultiEnv -.->|Manual: cdk deploy -c env=dev| DevStack
+    MultiEnv -.->|Manual: cdk deploy -c env=stage| StageStack
+    MultiEnv -.->|Manual: cdk deploy -c env=prod| ProdStack
+    
+    DevStack -.->|Future: Auto-promote| StageStack
+    StageStack -.->|Future: Manual approval| ProdStack
+    
+    classDef implemented fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    classDef planned fill:#f8f9fa,stroke:#6c757d,stroke-width:2px,stroke-dasharray: 5 5;
+    
+    class GitHub,Tests,Synth,MultiEnv,DevStack,StageStack,ProdStack implemented;
+```
+
+**Key Features (Issue #9):**
+- ✅ Environment-aware stack configuration via CDK context
+- ✅ Different removal policies per environment (dev=DESTROY, stage/prod=RETAIN)
+- ✅ Auto-delete objects in dev for rapid iteration
+- ✅ Comprehensive test coverage for environment-specific behavior
+- ⏳ CDK Pipelines for automated deployment (planned for Issue #10+)
+
+---
+
 ## 6. Security
 
 - **Private buckets:** Both the input and output S3 buckets block all public
@@ -542,28 +602,106 @@ flowchart TD
 
 ## 9. Multi-Environment Support (dev / stage / prod)
 
-The stack is environment-aware through **CDK context**. An `env` context value
-(`dev`, `stage`, or `prod`) selects per-environment configuration such as:
+**✅ Implemented in Issue #9**
 
-- Resource name prefixes and removal policies (e.g., `RETAIN` in prod,
-  `DESTROY` in dev).
-- Whether the **Bedrock** enhancement branch is enabled.
-- Log retention duration and alarm thresholds.
-- DynamoDB and S3 lifecycle settings.
+The stack is fully environment-aware through **CDK context**. An `env` context value
+(`dev`, `stage`, or `prod`) drives per-environment configuration:
+
+### Environment-Specific Behavior
+
+| Configuration | dev | stage | prod |
+|--------------|-----|-------|------|
+| **Removal Policy (S3)** | `DESTROY` | `RETAIN` | `RETAIN` |
+| **Removal Policy (DynamoDB)** | `DESTROY` | `RETAIN` | `RETAIN` |
+| **Auto-Delete Objects (S3)** | `true` | `false` | `false` |
+| **Bedrock Enhancement** | Disabled | Optional | Optional |
+| **Log Retention** | 7 days | 30 days | 90 days (planned) |
+
+### Usage
 
 ```bash
 # Synthesize/deploy a specific environment
-cdk synth -c env=dev
-cdk deploy -c env=stage
-cdk deploy -c env=prod
+cdk synth -c env=dev       # Development - easy cleanup
+cdk synth -c env=stage     # Staging - data retained
+cdk deploy -c env=prod     # Production - data retained
+
+# Default behavior (from cdk.json)
+cdk synth                  # Uses env=dev by default
 ```
 
-Defaults are defined in `cdk.json` so that a context-free `cdk synth` still
-produces a valid template for CI smoke tests.
+### Implementation Details
+
+The stack reads the `env` context value in `NewCdkBaseStack()`:
+- **Default:** `dev` (defined in `cdk.json` context)
+- **Removal Policies:** 
+  - `dev` → `RemovalPolicy_DESTROY` for easy cleanup and rapid iteration
+  - `stage`/`prod` → `RemovalPolicy_RETAIN` for data safety
+- **Auto-Delete Objects:** Only enabled in `dev` to allow complete stack teardown
+- **Test Coverage:** Comprehensive tests verify environment-specific behavior
+
+### Future Extensions
+
+- **Resource name prefixes:** Add environment suffix to resource names for easier identification
+- **Alarm thresholds:** Adjust CloudWatch alarm sensitivity per environment
+- **Lambda concurrency:** Set reserved concurrency in prod, unreserved in dev
+- **DynamoDB capacity:** Consider provisioned capacity in prod for cost optimization
 
 ---
 
-## 10. Future Extensibility
+## 10. Deployment & CI/CD Strategy
+
+### Current Deployment Approach (Issue #9)
+
+The application is deployed using standard CDK CLI commands:
+
+```bash
+# Development environment (quick iteration, auto-cleanup)
+cdk deploy -c env=dev
+
+# Staging environment (pre-production validation)
+cdk deploy -c env=stage
+
+# Production environment (live workloads)
+cdk deploy -c env=prod
+```
+
+### Continuous Integration (GitHub Actions)
+
+The `.github/workflows/ci.yml` workflow runs on every push and pull request:
+
+1. **Go Tests:** `go test ./...` - validates all CDK construct tests
+2. **CDK Synth:** `cdk synth` - ensures the stack synthesizes without errors
+3. **Environment Tests:** Tests verify multi-environment behavior (dev/stage/prod)
+
+### Deployment Preparation (Issue #9)
+
+Multi-environment support has been implemented to prepare for CDK Pipelines:
+- ✅ Environment context reading (dev/stage/prod)
+- ✅ Environment-specific removal policies
+- ✅ Auto-delete resources in dev for rapid iteration
+- ✅ Comprehensive test coverage for environment behavior
+- ⏳ CDK Pipelines construct (planned for Issue #10+)
+
+### Future: CDK Pipelines (Planned)
+
+A self-mutating deployment pipeline will be added using `aws-cdk-lib/pipelines`:
+
+**Planned Pipeline Stages:**
+1. **Source:** GitHub repository (main branch)
+2. **Build:** Run `go test` and `cdk synth`
+3. **Dev Deploy:** Auto-deploy to dev environment
+4. **Stage Deploy:** Deploy to staging with approval
+5. **Prod Deploy:** Deploy to production with manual approval
+
+**Benefits:**
+- Automated deployments on merge to main
+- Self-updating pipeline infrastructure
+- Environment promotion with approvals
+- Integration test stages between environments
+
+---
+
+## 11. Future Extensibility
 
 - **Additional EventBridge targets:** Add analytics, auditing, or a data-lake
   ingestion target without modifying producers.
@@ -578,7 +716,7 @@ produces a valid template for CI smoke tests.
 
 ---
 
-## 11. AWS Well-Architected Alignment
+## 12. AWS Well-Architected Alignment
 
 | Pillar | Design Decision |
 |---|---|
