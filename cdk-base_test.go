@@ -454,7 +454,7 @@ func TestLambdaFunctionExists(t *testing.T) {
 	template := assertions.Template_FromStack(stack, nil)
 	
 	// Verify we have at least 2 Lambda functions (S3 notifications handler + our processor)
-	// In dev environment (default), auto-delete adds 2 more Lambdas
+	// In dev environment (default), auto-delete adds 1 shared Lambda
 	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))
 }
 
@@ -681,7 +681,7 @@ func TestCompleteEndToEndFlow(t *testing.T) {
 	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))  // Input + Output
 	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))  // EventBridge rule
 	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))  // State machine
-	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))  // Processor + S3 handler + 2x auto-delete handlers (dev default)
+	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))  // Processor + S3 handler + 1 auto-delete handler (shared) (dev default)
 	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))  // Metadata table
 	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))  // Completed + Failed topics
 }
@@ -701,7 +701,7 @@ func TestCompleteStackSnapshot(t *testing.T) {
 	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))                           // Input + Output
 	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))                         // EventBridge rule
 	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))         // State machine
-	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))                     // Processor + S3 handler + 2x auto-delete handlers (dev default)
+	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))                     // Processor + S3 handler + 1 auto-delete handler (shared) (dev default)
 	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))                      // Metadata table
 	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))                           // Completed + Failed
 	template.ResourceCountIs(jsii.String("AWS::KMS::Key"), jsii.Number(1))                             // SNS encryption key
@@ -913,7 +913,7 @@ func TestValidInputFlowCompletesSuccessfully(t *testing.T) {
 	// Verify we have all the key resources for the happy path:
 	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))           // Input + Output
 	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))      // Metadata
-	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))     // Processor + S3 handler + 2x auto-delete handlers (dev default)
+	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))     // Processor + S3 handler + 1 auto-delete handler (shared) (dev default)
 	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1)) // Orchestrator
 	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))           // Success + Failure notifications
 	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))         // S3 trigger
