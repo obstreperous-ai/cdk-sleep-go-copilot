@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatchactions"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsevents"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awseventstargets"
@@ -91,6 +93,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		Timeout: awscdk.Duration_Minutes(jsii.Number(1)),
 		MemorySize: jsii.Number(256),
 		Description: jsii.String("Validates audio files and extracts metadata for the sleep audio pipeline"),
+		Tracing: awslambda.Tracing_ACTIVE,
 	})
 
 	// Grant the Lambda function read access to DynamoDB
@@ -161,11 +164,36 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		ResultPath: jsii.String("$.dynamoResult"),
 	})
 	
+	// Add retry policy to DynamoDB PutItem task
+	putItemTask.AddRetry(&awsstepfunctions.RetryProps{
+		Errors: jsii.Strings(
+			"DynamoDB.ProvisionedThroughputExceededException",
+			"DynamoDB.RequestLimitExceeded",
+			"DynamoDB.InternalServerError",
+		),
+		Interval:      awscdk.Duration_Seconds(jsii.Number(1)),
+		MaxAttempts:   jsii.Number(3),
+		BackoffRate:   jsii.Number(2.0),
+	})
+	
 	// Lambda invocation task - process and validate audio file
 	processAudioTask := awsstepfunctionstasks.NewLambdaInvoke(stack, jsii.String("ProcessAudioFile"), &awsstepfunctionstasks.LambdaInvokeProps{
 		LambdaFunction: audioProcessorFunction,
 		ResultPath:     jsii.String("$.processorResult"),
 		PayloadResponseOnly: jsii.Bool(true),
+	})
+	
+	// Add retry policy to Lambda invocation task
+	processAudioTask.AddRetry(&awsstepfunctions.RetryProps{
+		Errors: jsii.Strings(
+			"Lambda.ServiceException",
+			"Lambda.AWSLambdaException",
+			"Lambda.SdkClientException",
+			"Lambda.TooManyRequestsException",
+		),
+		Interval:      awscdk.Duration_Seconds(jsii.Number(2)),
+		MaxAttempts:   jsii.Number(3),
+		BackoffRate:   jsii.Number(2.0),
 	})
 	
 	// Pass state to format Lambda errors for the error handling chain
@@ -188,6 +216,18 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		IamResources: jsii.Strings("*"),
 		ResultPath:   jsii.String("$.pollyResult"),
 	})
+	
+	// Add retry policy to Polly task
+	pollyTask.AddRetry(&awsstepfunctions.RetryProps{
+		Errors: jsii.Strings(
+			"Polly.ServiceFailureException",
+			"Polly.ThrottlingException",
+			"States.TaskFailed",
+		),
+		Interval:      awscdk.Duration_Seconds(jsii.Number(1)),
+		MaxAttempts:   jsii.Number(3),
+		BackoffRate:   jsii.Number(1.5),
+	})
 
 	// DynamoDB UpdateItem task - update status to COMPLETED on success
 	updateStatusCompleted := awsstepfunctionstasks.NewDynamoUpdateItem(stack, jsii.String("UpdateStatusCompleted"), &awsstepfunctionstasks.DynamoUpdateItemProps{
@@ -209,6 +249,18 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			),
 		},
 		ResultPath: jsii.String("$.updateResult"),
+	})
+	
+	// Add retry policy to DynamoDB UpdateItem task (completion)
+	updateStatusCompleted.AddRetry(&awsstepfunctions.RetryProps{
+		Errors: jsii.Strings(
+			"DynamoDB.ProvisionedThroughputExceededException",
+			"DynamoDB.RequestLimitExceeded",
+			"DynamoDB.InternalServerError",
+		),
+		Interval:      awscdk.Duration_Seconds(jsii.Number(1)),
+		MaxAttempts:   jsii.Number(3),
+		BackoffRate:   jsii.Number(2.0),
 	})
 
 	// SNS Publish task - send completion notification
@@ -248,6 +300,18 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			),
 		},
 		ResultPath: jsii.String("$.updateResult"),
+	})
+	
+	// Add retry policy to DynamoDB UpdateItem task (failure)
+	updateStatusFailed.AddRetry(&awsstepfunctions.RetryProps{
+		Errors: jsii.Strings(
+			"DynamoDB.ProvisionedThroughputExceededException",
+			"DynamoDB.RequestLimitExceeded",
+			"DynamoDB.InternalServerError",
+		),
+		Interval:      awscdk.Duration_Seconds(jsii.Number(1)),
+		MaxAttempts:   jsii.Number(3),
+		BackoffRate:   jsii.Number(2.0),
 	})
 
 	// SNS Publish task - send failure notification
@@ -305,6 +369,42 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		},
 		TracingEnabled: jsii.Bool(true),
 	})
+
+	// CloudWatch Alarms for observability
+	
+	// Alarm for State Machine Execution Failures
+	stateMachineFailureAlarm := awscloudwatch.NewAlarm(stack, jsii.String("StateMachineExecutionFailureAlarm"), &awscloudwatch.AlarmProps{
+		Metric: stateMachine.MetricFailed(&awscloudwatch.MetricOptions{
+			Period:     awscdk.Duration_Minutes(jsii.Number(5)),
+			Statistic:  jsii.String("Sum"),
+		}),
+		Threshold:          jsii.Number(1),
+		EvaluationPeriods:  jsii.Number(1),
+		ComparisonOperator: awscloudwatch.ComparisonOperator_GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+		AlarmDescription:   jsii.String("Alert when state machine executions fail"),
+		AlarmName:          jsii.String("SleepAudioPipeline-StateMachine-Failures"),
+		TreatMissingData:   awscloudwatch.TreatMissingData_NOT_BREACHING,
+	})
+	
+	// Add SNS action to publish to failed topic when alarm triggers
+	stateMachineFailureAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(failedTopic))
+	
+	// Alarm for Lambda Errors
+	lambdaErrorAlarm := awscloudwatch.NewAlarm(stack, jsii.String("LambdaErrorAlarm"), &awscloudwatch.AlarmProps{
+		Metric: audioProcessorFunction.MetricErrors(&awscloudwatch.MetricOptions{
+			Period:     awscdk.Duration_Minutes(jsii.Number(5)),
+			Statistic:  jsii.String("Sum"),
+		}),
+		Threshold:          jsii.Number(5),
+		EvaluationPeriods:  jsii.Number(1),
+		ComparisonOperator: awscloudwatch.ComparisonOperator_GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+		AlarmDescription:   jsii.String("Alert when Lambda function has high error rate"),
+		AlarmName:          jsii.String("SleepAudioPipeline-Lambda-Errors"),
+		TreatMissingData:   awscloudwatch.TreatMissingData_NOT_BREACHING,
+	})
+	
+	// Add SNS action to publish to failed topic when alarm triggers
+	lambdaErrorAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(failedTopic))
 
 	// EventBridge Rule - triggers on Object Created events from Input Bucket
 	rule := awsevents.NewRule(stack, jsii.String("AudioUploadedRule"), &awsevents.RuleProps{
