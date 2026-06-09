@@ -73,7 +73,13 @@ func logStructured(level, message string, data map[string]interface{}) {
 		entry.Metadata = metadata
 	}
 	
-	jsonLog, _ := json.Marshal(entry)
+	jsonLog, err := json.Marshal(entry)
+	if err != nil {
+		// Fallback to plain text if JSON marshaling fails
+		fmt.Fprintf(os.Stderr, "[%s] %s: %s (marshal error: %v)\n", 
+			time.Now().UTC().Format(time.RFC3339), level, message, err)
+		return
+	}
 	fmt.Println(string(jsonLog))
 }
 
