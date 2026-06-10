@@ -63,6 +63,14 @@ type LogEntry struct {
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// Constants for audio processing configuration
+const (
+	processorVersion = "2.0.0"
+	pollyCharLimit   = 3000
+	mp3BitrateKbps   = 128
+	wavBitrateKbps   = 1411
+)
+
 // logStructured outputs a structured JSON log entry
 func logStructured(level, message string, data map[string]interface{}) {
 	entry := LogEntry{
@@ -229,7 +237,7 @@ func Handler(ctx context.Context, input AudioProcessorInput) (AudioProcessorOutp
 		Message:      "Audio file processed successfully",
 		Metadata: map[string]interface{}{
 			"processor":    "SleepAudioProcessor",
-			"version":      "2.0.0",
+			"version":      processorVersion,
 			"extension":    ext,
 			"processedAt":  time.Now().UTC().Format(time.RFC3339),
 			"outputBucket": result.OutputBucket,
@@ -305,8 +313,8 @@ func processAudioFile(ctx context.Context, sess *session.Session, inputBucket, i
 		
 		// Read text content
 		textContent := string(inputData)
-		if len(textContent) > 3000 {
-			textContent = textContent[:3000] // Polly limit
+		if len(textContent) > pollyCharLimit {
+			textContent = textContent[:pollyCharLimit] // Polly limit
 		}
 		
 		synthesizeOutput, err := pollyClient.SynthesizeSpeechWithContext(ctx, &polly.SynthesizeSpeechInput{
@@ -361,14 +369,14 @@ func processAudioFile(ctx context.Context, sess *session.Session, inputBucket, i
 	}
 	
 	// Calculate approximate duration (simplified - real implementation would parse audio metadata)
-	// For demonstration: assume ~128kbps for MP3, ~1400kbps for WAV
+	// For demonstration: assume ~128kbps for MP3, ~1411kbps for WAV
 	var durationSeconds float64
 	if format == "mp3" {
-		durationSeconds = float64(len(processedData)) / (128 * 1024 / 8) // bytes / (bitrate in bytes/sec)
+		durationSeconds = float64(len(processedData)) / (mp3BitrateKbps * 1024 / 8) // bytes / (bitrate in bytes/sec)
 	} else if format == "wav" {
-		durationSeconds = float64(len(processedData)) / (1411 * 1024 / 8)
+		durationSeconds = float64(len(processedData)) / (wavBitrateKbps * 1024 / 8)
 	} else {
-		durationSeconds = float64(len(processedData)) / (128 * 1024 / 8) // default estimate
+		durationSeconds = float64(len(processedData)) / (mp3BitrateKbps * 1024 / 8) // default estimate
 	}
 	
 	result := &ProcessingResult{
