@@ -5,7 +5,7 @@
 > this document (and its Mermaid diagram) in sync with the deployed
 > infrastructure.
 >
-> **Implementation Status (as of Issue #9):** 
+> **Implementation Status (as of Issue #10):** 
 > - ✅ Core S3 Buckets (Input & Output) with encryption, versioning
 > - ✅ EventBridge Rule for Object Created events
 > - ✅ Step Functions State Machine (AudioProcessingStateMachine) with CloudWatch Logs
@@ -23,8 +23,12 @@
 > - ✅ **Multi-environment support** (dev/stage/prod) with context-driven configuration - **Issue #9**
 > - ✅ **Environment-specific removal policies** (DESTROY for dev, RETAIN for stage/prod) - **Issue #9**
 > - ✅ **Expanded test coverage** for pipeline integration and validation - **Issue #9**
-> - ⏳ CDK Pipelines construct for CI/CD deployment - planned for Issue #10+
-> - ⏳ CloudWatch Alarms - planned for Issue #10+
+> - ✅ **Advanced retry policies** with exponential backoff on all tasks - **Issue #10**
+> - ✅ **X-Ray tracing** enabled on Lambda and Step Functions - **Issue #10**
+> - ✅ **Structured JSON logging** in Lambda with request IDs - **Issue #10**
+> - ✅ **CloudWatch Alarms** for state machine and Lambda failures - **Issue #10**
+> - ⏳ CDK Pipelines construct for CI/CD deployment - planned for Issue #11+
+> - ⏳ Full audio processing implementation - planned for Issue #11+
 
 ---
 
@@ -147,7 +151,28 @@ The state machine orchestrates the following workflow with comprehensive input v
 
 8. **X-Ray Tracing** — Enabled for distributed tracing and performance analysis.
 
-**Future Expansion (Issue #9+):**
+9. **Retry Policies (Issue #10)** — All tasks have configured retry policies with exponential backoff:
+   - **Lambda Invocation Task:**
+     - Maximum Attempts: 3
+     - Initial Interval: 2 seconds
+     - Backoff Rate: 2.0 (exponential: 2s, 4s, 8s)
+     - Handled Errors: Lambda.ServiceException, Lambda.AWSLambdaException, Lambda.SdkClientException, Lambda.TooManyRequestsException
+   
+   - **Polly Task:**
+     - Maximum Attempts: 3
+     - Initial Interval: 1 second
+     - Backoff Rate: 1.5 (exponential: 1s, 1.5s, 2.25s)
+     - Handled Errors: Polly.ServiceFailureException, Polly.ThrottlingException, States.TaskFailed
+   
+   - **DynamoDB Tasks (PutItem, UpdateItem):**
+     - Maximum Attempts: 3
+     - Initial Interval: 1 second
+     - Backoff Rate: 2.0 (exponential: 1s, 2s, 4s)
+     - Handled Errors: DynamoDB.ProvisionedThroughputExceededException, DynamoDB.RequestLimitExceeded, DynamoDB.InternalServerError
+   
+   These retry policies handle transient failures automatically before routing to error handlers.
+
+**Future Expansion (Issue #11+):**
 The state machine will coordinate these additional steps:
 1. **Enhanced Audio Validation** — The `SleepAudioProcessor` Lambda will be
    extended to verify audio format, size, duration, and sample rate using AWS SDK or
@@ -319,6 +344,19 @@ The following core components are **currently deployed** in the CDK stack:
 - **IAM Permissions:** 
   - DynamoDB GetItem (read access to metadata table)
   - CloudWatch Logs (CreateLogGroup, CreateLogStream, PutLogEvents)
+  - X-Ray (PutTraceSegments, PutTelemetryRecords)
+- **X-Ray Tracing:** Active mode enabled for distributed tracing (Issue #10)
+- **Structured Logging (Issue #10):**
+  - JSON-formatted log entries with:
+    - `timestamp`: RFC3339 format timestamp
+    - `level`: Log level (INFO, ERROR)
+    - `message`: Human-readable message
+    - `requestId`: Lambda request ID for correlation
+    - `bucket`, `key`: S3 context
+    - `status`: Processing status
+    - `error`: Error details (when applicable)
+    - `metadata`: Additional context (extension, processor version)
+  - Enables efficient log parsing, CloudWatch Insights queries, and log aggregation
 - **Validation Logic:**
   - **Required fields:** Validates bucket and key are present
   - **File extension:** Validates against supported formats (.mp3, .wav, .m4a, .flac, .ogg, .aac)
@@ -326,7 +364,7 @@ The following core components are **currently deployed** in the CDK stack:
   - Returns descriptive error messages for validation failures
 - **Purpose:** Validates incoming audio files, extracts basic metadata, and prepares data for downstream processing
 - **Input:** Receives bucket and key from state machine (via DynamoDB result context)
-- **Output:** Returns validation status, audioId, enriched metadata (extension, processor version)
+- **Output:** Returns validation status, audioId, enriched metadata (extension, processor version, RFC3339 timestamp)
 - **Error Handling:** Throws errors for invalid input that are caught by state machine Catch blocks
 
 #### `SleepAudioMetadataTable` (AWS::DynamoDB::Table)
@@ -392,11 +430,17 @@ The following core components are **currently deployed** in the CDK stack:
 - **Message:** Failure notification with audioId, bucket, error, and status
 - **Purpose:** Notifies subscribers of pipeline failures for operational awareness
 
+#### CloudWatch Alarms (Issue #10)
+- **State Machine Failure Alarm:** Monitors `ExecutionsFailed` metric (threshold: ≥1 in 5 minutes)
+- **Lambda Error Alarm:** Monitors `Errors` metric (threshold: ≥5 in 5 minutes)
+- **Actions:** Both alarms publish to `SleepAudioPipelineFailedTopic` for operational alerts
+- **Purpose:** Proactive monitoring of critical failure paths in the pipeline
+
 ### Not Yet Implemented (Future Issues)
-- **Additional Lambda Functions** (`FinalizeAudio`, etc.) — Issue #9+
-- **CloudWatch Alarms** and enhanced observability integration — Issue #9+
-- **Enhanced Audio Validation** in SleepAudioProcessor (format verification, size, duration checks using AWS SDK) — Issue #9+
-- **S3 Write Integration** - Actually writing processed audio to output bucket — Issue #9+
+- **Additional Lambda Functions** (`FinalizeAudio`, etc.) — Issue #11+
+- **Enhanced Audio Validation** in SleepAudioProcessor (format verification, size, duration checks using AWS SDK) — Issue #11+
+- **S3 Write Integration** - Actually writing processed audio to output bucket — Issue #11+
+- **CloudWatch Dashboard** - Unified dashboard showing key metrics — Issue #11+
 
 ---
 
@@ -440,7 +484,12 @@ flowchart TD
         SNSFailed["Amazon SNS<br/>SleepAudioPipelineFailedTopic<br/>(KMS encrypted)<br/>(✅ Implemented)"]
     end
 
-    CW["Amazon CloudWatch<br/>Logs (✅) + Alarms (⏳)"]
+    subgraph Observability ["Observability (✅ X-Ray + Logs + Alarms)"]
+        CWLogs["Amazon CloudWatch Logs<br/>(✅ Structured JSON logs)"]
+        CWAlarms["Amazon CloudWatch Alarms<br/>(✅ StateMachine + Lambda)"]
+        XRay["AWS X-Ray<br/>(✅ Active tracing)"]
+    end
+    
     Subs(["Subscribers<br/>(email / push / ops)"])
 
     Client -- "1. upload audio (pre-signed URL)" --> S3In
@@ -469,6 +518,14 @@ flowchart TD
     UpdateFailed -. "7c. update status (FAILED)" .-> DDB
     UpdateFailed -.-> PublishFailed
     PublishFailed -. "7d. failure notification" .-> SNSFailed
+    
+    %% Observability connections
+    ValidateInput -.-> CWLogs
+    ProcessLambda -.-> CWLogs
+    ProcessLambda -.-> XRay
+    Polly -.-> CWLogs
+    ValidateInput -.-> XRay
+    CWAlarms -. "alarm on failures" .-> SNSFailed
     
     Polly -. "future enhancement" .-> Bedrock
     Bedrock -.-> Finalize
@@ -572,14 +629,55 @@ flowchart TB
 
 ## 7. Observability
 
-- **Structured logging:** Each Lambda and the Step Functions execution emit
-  JSON logs to dedicated CloudWatch Log Groups with bounded retention.
-- **Execution history:** Step Functions provides a visual, per-execution audit
-  trail of every state transition, input, and output.
-- **Metrics & alarms:** CloudWatch Alarms fire on
-  `StateMachine ExecutionsFailed`, Lambda `Errors`/`Throttles`, and DLQ depth
-  (for any async targets), routing alerts to the SNS notifications topic.
-- **Traceability:** A `session_id` correlates the input object, state-machine
+**Current Implementation (Issue #10):**
+
+### Structured Logging
+- **Lambda Functions:** Emit JSON-formatted logs to CloudWatch with:
+  - Timestamp (RFC3339 format)
+  - Log level (INFO, ERROR)
+  - Request ID for correlation
+  - Contextual information (bucket, key, status, error details)
+  - Metadata (extension, processor version, timestamps)
+- **Step Functions:** Comprehensive execution logs (ALL level) to dedicated log group
+  - 7-day retention for cost optimization
+  - Captures all state transitions, inputs, and outputs
+- **CloudWatch Insights:** JSON structure enables efficient querying and analysis
+
+### Distributed Tracing
+- **X-Ray Tracing:** Enabled on Lambda function and Step Functions state machine
+  - Active mode provides detailed trace segments
+  - Tracks request flow across services
+  - Performance analysis and bottleneck identification
+  - Service map visualization
+
+### CloudWatch Alarms
+Two critical alarms monitor pipeline health and publish to the `SleepAudioPipelineFailedTopic`:
+
+1. **State Machine Execution Failure Alarm**
+   - **Metric:** `AWS/States ExecutionsFailed`
+   - **Threshold:** ≥ 1 failed execution
+   - **Period:** 5 minutes
+   - **Statistic:** Sum
+   - **Evaluation Periods:** 1
+   - **Action:** Publish to SleepAudioPipelineFailedTopic
+   - **Treat Missing Data:** Not breaching (no alarm when no executions)
+
+2. **Lambda Error Alarm**
+   - **Metric:** `AWS/Lambda Errors`
+   - **Threshold:** ≥ 5 errors
+   - **Period:** 5 minutes
+   - **Statistic:** Sum
+   - **Evaluation Periods:** 1
+   - **Action:** Publish to SleepAudioPipelineFailedTopic
+   - **Treat Missing Data:** Not breaching (no alarm when no invocations)
+
+### Execution History
+- Step Functions provides a visual, per-execution audit trail of every state transition, input, and output
+- Enables debugging and root cause analysis without deep log diving
+
+### Traceability
+- Lambda request IDs correlate logs across invocations
+- A `session_id` (audioId) correlates the input object, state-machine
   execution, output object, DynamoDB record, and notifications end to end.
 
 ---
