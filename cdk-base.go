@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsevents"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awseventstargets"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awskms"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
@@ -59,7 +60,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 	})
 
 	// Output S3 Bucket - stores processed audio
-	awss3.NewBucket(stack, jsii.String("SleepAudioOutputBucket"), &awss3.BucketProps{
+	outputBucket := awss3.NewBucket(stack, jsii.String("SleepAudioOutputBucket"), &awss3.BucketProps{
 		Encryption:        awss3.BucketEncryption_S3_MANAGED,
 		Versioned:         jsii.Bool(true),
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
@@ -82,22 +83,36 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 	})
 
 	// Lambda Function - Audio Processor
-	// This Lambda validates audio files and extracts metadata before processing
+	// This Lambda processes audio files, generates sleep sounds, and uploads to output bucket
 	audioProcessorFunction := awslambda.NewFunction(stack, jsii.String("SleepAudioProcessor"), &awslambda.FunctionProps{
 		Runtime: awslambda.Runtime_PROVIDED_AL2023(),
 		Handler: jsii.String("bootstrap"),
 		Code:    awslambda.Code_FromAsset(jsii.String("lambda/audio-processor"), nil),
 		Environment: &map[string]*string{
-			"TABLE_NAME": metadataTable.TableName(),
+			"TABLE_NAME":    metadataTable.TableName(),
+			"OUTPUT_BUCKET": outputBucket.BucketName(),
 		},
-		Timeout: awscdk.Duration_Minutes(jsii.Number(1)),
-		MemorySize: jsii.Number(256),
-		Description: jsii.String("Validates audio files and extracts metadata for the sleep audio pipeline"),
-		Tracing: awslambda.Tracing_ACTIVE,
+		Timeout:     awscdk.Duration_Minutes(jsii.Number(5)),  // Increased for processing
+		MemorySize:  jsii.Number(512),                          // Increased for audio processing
+		Description: jsii.String("Processes audio files, generates sleep sounds, and uploads to output bucket"),
+		Tracing:     awslambda.Tracing_ACTIVE,
 	})
 
-	// Grant the Lambda function read access to DynamoDB
-	metadataTable.GrantReadData(audioProcessorFunction)
+	// Grant the Lambda function read access to input bucket
+	inputBucket.GrantRead(audioProcessorFunction, jsii.String("*"))
+	
+	// Grant the Lambda function write access to output bucket
+	outputBucket.GrantWrite(audioProcessorFunction, jsii.String("*"), nil)
+	
+	// Grant the Lambda function read and write access to DynamoDB
+	metadataTable.GrantReadWriteData(audioProcessorFunction)
+	
+	// Grant the Lambda function permissions to use Polly for speech synthesis
+	audioProcessorFunction.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions:   jsii.Strings("polly:SynthesizeSpeech"),
+		Resources: jsii.Strings("*"),
+		Effect:    awsiam.Effect_ALLOW,
+	}))
 
 	// SNS Topics - for pipeline notifications
 

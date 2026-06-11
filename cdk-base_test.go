@@ -945,6 +945,162 @@ func TestInvalidInputPathRejectsEarly(t *testing.T) {
 }
 
 // ============================================================================
+// Issue #11: Full Audio Processing Implementation Tests
+// ============================================================================
+
+// TestLambdaHasS3ReadPermissions verifies Lambda can read from input bucket.
+func TestLambdaHasS3ReadPermissions(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify IAM policy grants S3 GetObject permissions for Lambda
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Check Lambda service role policy contains S3 read permissions
+	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
+		"PolicyName": "SleepAudioProcessorServiceRoleDefaultPolicy625FED6F",
+		"PolicyDocument": map[string]interface{}{
+			"Statement": assertions.Match_ArrayWith(&[]interface{}{
+				map[string]interface{}{
+					"Action": []interface{}{
+						"s3:GetObject*",
+						"s3:GetBucket*",
+						"s3:List*",
+					},
+					"Effect": "Allow",
+					"Resource": assertions.Match_AnyValue(),
+				},
+			}),
+		},
+	})
+}
+
+// TestLambdaHasS3WritePermissions verifies Lambda can write to output bucket.
+func TestLambdaHasS3WritePermissions(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify IAM policy grants S3 PutObject permissions for Lambda
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Check Lambda service role policy contains S3 write permissions
+	// Using a more flexible match since CDK may generate different action names
+	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
+		"PolicyName": "SleepAudioProcessorServiceRoleDefaultPolicy625FED6F",
+		"PolicyDocument": map[string]interface{}{
+			"Statement": assertions.Match_ArrayWith(&[]interface{}{
+				map[string]interface{}{
+					"Action": assertions.Match_ArrayWith(&[]interface{}{
+						assertions.Match_StringLikeRegexp(jsii.String("s3:.*Object.*")),
+					}),
+					"Effect": "Allow",
+					"Resource": assertions.Match_AnyValue(),
+				},
+			}),
+		},
+	})
+}
+
+// TestLambdaHasPollyPermissions verifies Lambda can use Polly for synthesis.
+func TestLambdaHasPollyPermissions(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify IAM policy grants Polly SynthesizeSpeech permissions
+	template := assertions.Template_FromStack(stack, nil)
+	
+	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
+		"PolicyName": "SleepAudioProcessorServiceRoleDefaultPolicy625FED6F",
+		"PolicyDocument": map[string]interface{}{
+			"Statement": assertions.Match_ArrayWith(&[]interface{}{
+				map[string]interface{}{
+					"Action": "polly:SynthesizeSpeech",
+					"Effect": "Allow",
+					"Resource": "*",
+				},
+			}),
+		},
+	})
+}
+
+// TestLambdaHasDynamoDBWritePermissions verifies Lambda can update DynamoDB.
+func TestLambdaHasDynamoDBWritePermissions(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify IAM policy grants DynamoDB UpdateItem permissions
+	template := assertions.Template_FromStack(stack, nil)
+	
+	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
+		"PolicyName": "SleepAudioProcessorServiceRoleDefaultPolicy625FED6F",
+		"PolicyDocument": map[string]interface{}{
+			"Statement": assertions.Match_ArrayWith(&[]interface{}{
+				map[string]interface{}{
+					"Action": assertions.Match_ArrayWith(&[]interface{}{
+						"dynamodb:UpdateItem",
+					}),
+					"Effect": "Allow",
+					"Resource": assertions.Match_AnyValue(),
+				},
+			}),
+		},
+	})
+}
+
+// TestLambdaHasOutputBucketEnvironmentVariable verifies OUTPUT_BUCKET env var is set.
+func TestLambdaHasOutputBucketEnvironmentVariable(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify Lambda has OUTPUT_BUCKET environment variable
+	template := assertions.Template_FromStack(stack, nil)
+	
+	// Find the audio processor Lambda (not the auto-delete handler)
+	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
+		"Description": "Processes audio files, generates sleep sounds, and uploads to output bucket",
+		"Environment": map[string]interface{}{
+			"Variables": map[string]interface{}{
+				"OUTPUT_BUCKET": assertions.Match_AnyValue(),
+				"TABLE_NAME":    assertions.Match_AnyValue(),
+			},
+		},
+	})
+}
+
+// TestLambdaHasIncreasedTimeout verifies Lambda has sufficient timeout for processing.
+func TestLambdaHasIncreasedTimeout(t *testing.T) {
+	// GIVEN
+	app := awscdk.NewApp(nil)
+
+	// WHEN
+	stack := NewCdkBaseStack(app, "TestStack", nil)
+
+	// THEN - verify Lambda has 5 minutes timeout and 512MB memory
+	template := assertions.Template_FromStack(stack, nil)
+	
+	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
+		"Description": "Processes audio files, generates sleep sounds, and uploads to output bucket",
+		"Timeout":     300, // 5 minutes in seconds
+		"MemorySize":  512,
+	})
+}
+
+// ============================================================================
 // Issue #10: Advanced Error Handling, Retries & Observability Tests
 // ============================================================================
 
