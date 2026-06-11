@@ -37,7 +37,7 @@ func TestInputS3BucketExists(t *testing.T) {
 
 	// THEN - verify input bucket exists with proper configuration
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify at least one S3 bucket has all required properties
 	template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
 		"BucketEncryption": map[string]interface{}{
@@ -59,7 +59,7 @@ func TestInputS3BucketExists(t *testing.T) {
 			"RestrictPublicBuckets": true,
 		},
 	})
-	
+
 	// Verify EventBridge notification is configured (input bucket only)
 	template.ResourceCountIs(jsii.String("Custom::S3BucketNotifications"), jsii.Number(1))
 	template.HasResourceProperties(jsii.String("Custom::S3BucketNotifications"), map[string]interface{}{
@@ -79,10 +79,10 @@ func TestOutputS3BucketExists(t *testing.T) {
 
 	// THEN - verify output bucket exists with encryption and versioning
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify we have exactly 2 S3 buckets (input + output)
 	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))
-	
+
 	// Verify all buckets have encryption, versioning, and public access blocked
 	// This applies to both input and output buckets
 	captures := assertions.NewCapture(nil)
@@ -110,7 +110,7 @@ func TestEventBridgeRuleExists(t *testing.T) {
 
 	// THEN - verify EventBridge rule exists
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::Events::Rule"), map[string]interface{}{
 		"EventPattern": map[string]interface{}{
 			"source":      []interface{}{"aws.s3"},
@@ -130,10 +130,10 @@ func TestStepFunctionsStateMachineExists(t *testing.T) {
 
 	// THEN - verify state machine exists
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify we have exactly 1 state machine
 	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))
-	
+
 	// Verify state machine has logging enabled
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"LoggingConfiguration": map[string]interface{}{
@@ -152,7 +152,7 @@ func TestStepFunctionsStateMachineDefinitionHasPollyTask(t *testing.T) {
 
 	// THEN - verify state machine definition contains expected states
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Capture the state machine definition
 	captures := assertions.NewCapture(nil)
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
@@ -170,10 +170,10 @@ func TestEventBridgeRuleTargetsStateMachine(t *testing.T) {
 
 	// THEN - verify EventBridge rule has a target
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify the rule has targets configured
 	template.HasResourceProperties(jsii.String("AWS::Events::Rule"), map[string]interface{}{
-		"State": "ENABLED",
+		"State":   "ENABLED",
 		"Targets": assertions.Match_AnyValue(),
 	})
 }
@@ -188,7 +188,7 @@ func TestStateMachineExecutionRole(t *testing.T) {
 
 	// THEN - verify IAM role exists for state machine
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify at least one IAM role exists (for state machine execution)
 	template.HasResourceProperties(jsii.String("AWS::IAM::Role"), map[string]interface{}{
 		"AssumeRolePolicyDocument": map[string]interface{}{
@@ -215,10 +215,10 @@ func TestDynamoDBTableExists(t *testing.T) {
 
 	// THEN - verify DynamoDB table exists
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify we have exactly 1 DynamoDB table
 	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))
-	
+
 	// Verify table has correct key schema (partition key: audioId)
 	template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
 		"KeySchema": []interface{}{
@@ -246,7 +246,7 @@ func TestDynamoDBTableBillingMode(t *testing.T) {
 
 	// THEN - verify on-demand billing mode
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
 		"BillingMode": "PAY_PER_REQUEST",
 	})
@@ -262,7 +262,7 @@ func TestDynamoDBTableEncryption(t *testing.T) {
 
 	// THEN - verify encryption is enabled
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
 		"SSESpecification": map[string]interface{}{
 			"SSEEnabled": true,
@@ -280,7 +280,7 @@ func TestDynamoDBTablePointInTimeRecovery(t *testing.T) {
 
 	// THEN - verify point-in-time recovery is enabled
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
 		"PointInTimeRecoverySpecification": map[string]interface{}{
 			"PointInTimeRecoveryEnabled": true,
@@ -298,13 +298,13 @@ func TestStateMachineHasDynamoDBPutItemTask(t *testing.T) {
 
 	// THEN - verify state machine definition contains DynamoDB task
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Capture the state machine definition
 	captures := assertions.NewCapture(nil)
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"DefinitionString": captures,
 	})
-	
+
 	// The captured value is an object (Fn::Join), so we need to verify the structure differently
 	// Instead, let's just verify that we have the expected IAM permissions for DynamoDB
 	// which is a more reliable indicator that DynamoDB integration exists
@@ -321,14 +321,14 @@ func TestStateMachineHasDynamoDBPermissions(t *testing.T) {
 
 	// THEN - verify IAM policy grants DynamoDB permissions
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify at least one IAM policy allows DynamoDB actions
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": "dynamodb:PutItem",
-					"Effect": "Allow",
+					"Action":   "dynamodb:PutItem",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -346,7 +346,7 @@ func TestSNSTopicsExist(t *testing.T) {
 
 	// THEN - verify we have exactly 2 SNS topics (completed + failed)
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))
 }
 
@@ -360,7 +360,7 @@ func TestSNSTopicsEncrypted(t *testing.T) {
 
 	// THEN - verify SNS topics have encryption enabled
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify at least one topic has KMS encryption
 	template.HasResourceProperties(jsii.String("AWS::SNS::Topic"), map[string]interface{}{
 		"KmsMasterKeyId": assertions.Match_AnyValue(),
@@ -379,14 +379,14 @@ func TestStateMachineHasErrorHandling(t *testing.T) {
 	// We verify this by checking for IAM permissions to update DynamoDB for error states
 	// and SNS publish permissions which indicate error/success notifications
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify IAM policy includes DynamoDB UpdateItem (needed for status updates)
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": "dynamodb:UpdateItem",
-					"Effect": "Allow",
+					"Action":   "dynamodb:UpdateItem",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -404,13 +404,13 @@ func TestStateMachineHasSNSPublishPermissions(t *testing.T) {
 
 	// THEN - verify IAM policy grants SNS publish permissions
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": "sns:Publish",
-					"Effect": "Allow",
+					"Action":   "sns:Publish",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -428,13 +428,13 @@ func TestStateMachineHasDynamoDBUpdatePermissions(t *testing.T) {
 
 	// THEN - verify IAM policy grants DynamoDB UpdateItem permissions
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": "dynamodb:UpdateItem",
-					"Effect": "Allow",
+					"Action":   "dynamodb:UpdateItem",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -452,7 +452,7 @@ func TestLambdaFunctionExists(t *testing.T) {
 
 	// THEN - verify Lambda functions exist
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify we have at least 2 Lambda functions (S3 notifications handler + our processor)
 	// In dev environment (default), auto-delete adds 1 shared Lambda
 	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))
@@ -468,7 +468,7 @@ func TestLambdaFunctionRuntime(t *testing.T) {
 
 	// THEN - verify Lambda uses provided.al2023 runtime (Go)
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
 		"Runtime": "provided.al2023",
 	})
@@ -484,7 +484,7 @@ func TestLambdaFunctionHandler(t *testing.T) {
 
 	// THEN - verify Lambda handler is bootstrap
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
 		"Handler": "bootstrap",
 	})
@@ -500,7 +500,7 @@ func TestLambdaFunctionEnvironmentVariables(t *testing.T) {
 
 	// THEN - verify Lambda has TABLE_NAME environment variable
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
 		"Environment": map[string]interface{}{
 			"Variables": map[string]interface{}{
@@ -520,14 +520,14 @@ func TestStateMachineHasLambdaInvokeTask(t *testing.T) {
 
 	// THEN - verify state machine can invoke Lambda (via IAM permissions)
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify IAM policy grants Lambda invoke permissions
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": "lambda:InvokeFunction",
-					"Effect": "Allow",
+					"Action":   "lambda:InvokeFunction",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -545,14 +545,14 @@ func TestLambdaHasDynamoDBReadPermissions(t *testing.T) {
 
 	// THEN - verify Lambda execution role has DynamoDB read permissions
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify at least one IAM policy allows DynamoDB GetItem
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": assertions.Match_ArrayWith(&[]interface{}{"dynamodb:GetItem"}),
-					"Effect": "Allow",
+					"Action":   assertions.Match_ArrayWith(&[]interface{}{"dynamodb:GetItem"}),
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -570,7 +570,7 @@ func TestLambdaExecutionRoleExists(t *testing.T) {
 
 	// THEN - verify Lambda execution role exists
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify at least one IAM role exists for Lambda
 	template.HasResourceProperties(jsii.String("AWS::IAM::Role"), map[string]interface{}{
 		"AssumeRolePolicyDocument": map[string]interface{}{
@@ -597,13 +597,13 @@ func TestStateMachineHasInputValidation(t *testing.T) {
 
 	// THEN - verify state machine has validation Choice state
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Capture the state machine definition
 	captures := assertions.NewCapture(nil)
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"DefinitionString": captures,
 	})
-	
+
 	// Note: Since DefinitionString is a complex Fn::Join, we verify validation through
 	// the state machine's ability to handle validation errors (tested in other tests)
 }
@@ -619,14 +619,14 @@ func TestLambdaErrorHandlingInStateMachine(t *testing.T) {
 	// THEN - verify the state machine can handle Lambda errors
 	// This is verified through IAM permissions and error handling paths
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// The state machine should have permissions to update DynamoDB on failure
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": "dynamodb:UpdateItem",
-					"Effect": "Allow",
+					"Action":   "dynamodb:UpdateItem",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -644,17 +644,17 @@ func TestCompleteEndToEndFlow(t *testing.T) {
 
 	// THEN - verify complete integration
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify EventBridge rule triggers state machine
 	template.HasResourceProperties(jsii.String("AWS::Events::Rule"), map[string]interface{}{
-		"State": "ENABLED",
+		"State":   "ENABLED",
 		"Targets": assertions.Match_AnyValue(), // Targets exist with proper structure
 	})
-	
+
 	// Verify state machine has all required permissions by checking individual policies
 	// Note: We can't use ArrayWith here because it would match ANY policy, including
 	// unrelated ones like S3 notifications. Instead, we verify permissions exist.
-	
+
 	// 1. State machine role exists with DynamoDB permissions
 	template.HasResourceProperties(jsii.String("AWS::IAM::Role"), map[string]interface{}{
 		"AssumeRolePolicyDocument": map[string]interface{}{
@@ -669,21 +669,21 @@ func TestCompleteEndToEndFlow(t *testing.T) {
 			},
 		},
 	})
-	
+
 	// 2. Verify key permissions exist (without matching specific policies)
 	// This is already verified by other individual tests:
 	// - TestStateMachineHasDynamoDBPermissions (PutItem)
 	// - TestStateMachineHasDynamoDBUpdatePermissions (UpdateItem)
 	// - TestStateMachineHasLambdaInvokeTask (Lambda invoke)
 	// - TestStateMachineHasSNSPublishPermissions (SNS publish)
-	
+
 	// Verify all key resources exist for end-to-end flow
-	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))  // Input + Output
-	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))  // EventBridge rule
-	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))  // State machine
-	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))  // Processor + S3 handler + 1 auto-delete handler (shared) (dev default)
-	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))  // Metadata table
-	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))  // Completed + Failed topics
+	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))                  // Input + Output
+	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))                // EventBridge rule
+	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1)) // State machine
+	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))            // Processor + S3 handler + 1 auto-delete handler (shared) (dev default)
+	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))             // Metadata table
+	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))                  // Completed + Failed topics
 }
 
 // TestCompleteStackSnapshot creates a snapshot test of the entire stack.
@@ -696,16 +696,16 @@ func TestCompleteStackSnapshot(t *testing.T) {
 
 	// THEN - capture template for regression testing
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify key resource counts to catch major structural changes
-	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))                           // Input + Output
-	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))                         // EventBridge rule
-	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))         // State machine
-	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))                     // Processor + S3 handler + 1 auto-delete handler (shared) (dev default)
-	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))                      // Metadata table
-	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))                           // Completed + Failed
-	template.ResourceCountIs(jsii.String("AWS::KMS::Key"), jsii.Number(1))                             // SNS encryption key
-	template.ResourceCountIs(jsii.String("AWS::Logs::LogGroup"), jsii.Number(1))                       // State machine logs
+	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))                  // Input + Output
+	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))                // EventBridge rule
+	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1)) // State machine
+	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))            // Processor + S3 handler + 1 auto-delete handler (shared) (dev default)
+	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))             // Metadata table
+	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))                  // Completed + Failed
+	template.ResourceCountIs(jsii.String("AWS::KMS::Key"), jsii.Number(1))                    // SNS encryption key
+	template.ResourceCountIs(jsii.String("AWS::Logs::LogGroup"), jsii.Number(1))              // State machine logs
 }
 
 // TestFileExtensionValidation verifies validation logic exists for file extensions.
@@ -718,7 +718,7 @@ func TestFileExtensionValidation(t *testing.T) {
 
 	// THEN - verify Lambda has validation logic (through environment variables and permissions)
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Lambda should have environment variables configured
 	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
 		"Environment": map[string]interface{}{
@@ -727,7 +727,7 @@ func TestFileExtensionValidation(t *testing.T) {
 			},
 		},
 	})
-	
+
 	// Note: Actual validation logic is in Lambda code, tested separately
 }
 
@@ -741,31 +741,31 @@ func TestErrorPathUpdatesStatusAndNotifies(t *testing.T) {
 
 	// THEN - verify error handling resources exist
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// State machine needs permissions to:
 	// 1. Update DynamoDB with FAILED status
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": "dynamodb:UpdateItem",
-					"Effect": "Allow",
+					"Action":   "dynamodb:UpdateItem",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
 		},
 	})
-	
+
 	// 2. Publish to both SNS topics (success and failure)
 	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))
-	
+
 	// State machine role should have SNS publish permissions
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": "sns:Publish",
-					"Effect": "Allow",
+					"Action":   "sns:Publish",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -775,7 +775,7 @@ func TestErrorPathUpdatesStatusAndNotifies(t *testing.T) {
 
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || 
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
 		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
 }
 
@@ -795,8 +795,8 @@ func findSubstring(s, substr string) bool {
 // TestMultiEnvironmentContextSupport verifies stack respects env context values.
 func TestMultiEnvironmentContextSupport(t *testing.T) {
 	tests := []struct {
-		name        string
-		envContext  string
+		name         string
+		envContext   string
 		expectRetain bool
 	}{
 		{
@@ -830,7 +830,7 @@ func TestMultiEnvironmentContextSupport(t *testing.T) {
 
 			// THEN - verify removal policy based on environment
 			template := assertions.Template_FromStack(stack, nil)
-			
+
 			if tt.expectRetain {
 				// Production/stage environments should use RETAIN
 				template.HasResource(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
@@ -890,7 +890,7 @@ func TestResourceNamingIncludesEnvironment(t *testing.T) {
 
 			// THEN - verify stack synthesizes with proper naming
 			template := assertions.Template_FromStack(stack, nil)
-			
+
 			// Stack should have resources (basic smoke test for proper synthesis)
 			template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))
 		})
@@ -907,16 +907,16 @@ func TestValidInputFlowCompletesSuccessfully(t *testing.T) {
 
 	// THEN - verify complete success path exists
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// This test verifies the complete integration exists
 	// Individual permission tests exist in other test cases
 	// Verify we have all the key resources for the happy path:
-	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))           // Input + Output
-	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))      // Metadata
-	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))     // Processor + S3 handler + 1 auto-delete handler (shared) (dev default)
+	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))                  // Input + Output
+	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))             // Metadata
+	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))            // Processor + S3 handler + 1 auto-delete handler (shared) (dev default)
 	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1)) // Orchestrator
-	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))           // Success + Failure notifications
-	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))         // S3 trigger
+	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))                  // Success + Failure notifications
+	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))                // S3 trigger
 }
 
 // TestInvalidInputPathRejectsEarly verifies validation at entry.
@@ -929,13 +929,13 @@ func TestInvalidInputPathRejectsEarly(t *testing.T) {
 
 	// THEN - state machine should have validation logic
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// State machine definition should exist (validation is in the definition)
 	captures := assertions.NewCapture(nil)
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"DefinitionString": captures,
 	})
-	
+
 	// Verify state machine exists with logging (indicates proper configuration)
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"LoggingConfiguration": map[string]interface{}{
@@ -958,7 +958,7 @@ func TestLambdaHasS3ReadPermissions(t *testing.T) {
 
 	// THEN - verify IAM policy grants S3 GetObject permissions for Lambda
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Check Lambda service role policy contains S3 read permissions
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyName": "SleepAudioProcessorServiceRoleDefaultPolicy625FED6F",
@@ -970,7 +970,7 @@ func TestLambdaHasS3ReadPermissions(t *testing.T) {
 						"s3:GetBucket*",
 						"s3:List*",
 					},
-					"Effect": "Allow",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -988,7 +988,7 @@ func TestLambdaHasS3WritePermissions(t *testing.T) {
 
 	// THEN - verify IAM policy grants S3 PutObject permissions for Lambda
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Check Lambda service role policy contains S3 write permissions
 	// Using a more flexible match since CDK may generate different action names
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
@@ -999,7 +999,7 @@ func TestLambdaHasS3WritePermissions(t *testing.T) {
 					"Action": assertions.Match_ArrayWith(&[]interface{}{
 						assertions.Match_StringLikeRegexp(jsii.String("s3:.*Object.*")),
 					}),
-					"Effect": "Allow",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -1017,14 +1017,14 @@ func TestLambdaHasPollyPermissions(t *testing.T) {
 
 	// THEN - verify IAM policy grants Polly SynthesizeSpeech permissions
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyName": "SleepAudioProcessorServiceRoleDefaultPolicy625FED6F",
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": "polly:SynthesizeSpeech",
-					"Effect": "Allow",
+					"Action":   "polly:SynthesizeSpeech",
+					"Effect":   "Allow",
 					"Resource": "*",
 				},
 			}),
@@ -1042,7 +1042,7 @@ func TestLambdaHasDynamoDBWritePermissions(t *testing.T) {
 
 	// THEN - verify IAM policy grants DynamoDB UpdateItem permissions
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyName": "SleepAudioProcessorServiceRoleDefaultPolicy625FED6F",
 		"PolicyDocument": map[string]interface{}{
@@ -1051,7 +1051,7 @@ func TestLambdaHasDynamoDBWritePermissions(t *testing.T) {
 					"Action": assertions.Match_ArrayWith(&[]interface{}{
 						"dynamodb:UpdateItem",
 					}),
-					"Effect": "Allow",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -1069,7 +1069,7 @@ func TestLambdaHasOutputBucketEnvironmentVariable(t *testing.T) {
 
 	// THEN - verify Lambda has OUTPUT_BUCKET environment variable
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Find the audio processor Lambda (not the auto-delete handler)
 	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
 		"Description": "Processes audio files, generates sleep sounds, and uploads to output bucket",
@@ -1092,7 +1092,7 @@ func TestLambdaHasIncreasedTimeout(t *testing.T) {
 
 	// THEN - verify Lambda has 5 minutes timeout and 512MB memory
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
 		"Description": "Processes audio files, generates sleep sounds, and uploads to output bucket",
 		"Timeout":     300, // 5 minutes in seconds
@@ -1114,13 +1114,13 @@ func TestLambdaInvokeTaskHasRetryPolicy(t *testing.T) {
 
 	// THEN - verify state machine definition includes retry configuration for Lambda task
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Capture the state machine definition to verify retry configuration
 	captures := assertions.NewCapture(nil)
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"DefinitionString": captures,
 	})
-	
+
 	// The definition should be a Fn::Join containing retry configuration
 	// We verify the state machine exists and has logging (proxy for proper configuration)
 	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))
@@ -1136,13 +1136,13 @@ func TestPollyTaskHasRetryPolicy(t *testing.T) {
 
 	// THEN - verify state machine definition includes retry configuration for Polly task
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Capture the state machine definition
 	captures := assertions.NewCapture(nil)
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"DefinitionString": captures,
 	})
-	
+
 	// Verify state machine exists with proper configuration
 	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))
 }
@@ -1157,10 +1157,10 @@ func TestDynamoDBTasksHaveRetryPolicy(t *testing.T) {
 
 	// THEN - verify state machine definition includes retry configuration for DynamoDB tasks
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify state machine exists with proper configuration
 	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))
-	
+
 	// Verify state machine has DynamoDB table created
 	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))
 }
@@ -1175,10 +1175,10 @@ func TestCloudWatchAlarmForStateMachineFailures(t *testing.T) {
 
 	// THEN - verify CloudWatch alarm exists for state machine failures
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Should have at least one CloudWatch alarm
 	template.ResourceCountIs(jsii.String("AWS::CloudWatch::Alarm"), jsii.Number(2))
-	
+
 	// Verify alarm monitors ExecutionsFailed metric
 	template.HasResourceProperties(jsii.String("AWS::CloudWatch::Alarm"), map[string]interface{}{
 		"MetricName": "ExecutionsFailed",
@@ -1197,7 +1197,7 @@ func TestCloudWatchAlarmForLambdaErrors(t *testing.T) {
 
 	// THEN - verify CloudWatch alarm exists for Lambda errors
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify alarm monitors Lambda Errors metric
 	template.HasResourceProperties(jsii.String("AWS::CloudWatch::Alarm"), map[string]interface{}{
 		"MetricName": "Errors",
@@ -1216,7 +1216,7 @@ func TestLambdaFunctionHasXRayTracing(t *testing.T) {
 
 	// THEN - verify Lambda function has X-Ray tracing enabled
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
 		"TracingConfig": map[string]interface{}{
 			"Mode": "Active",
@@ -1234,7 +1234,7 @@ func TestStateMachineHasXRayTracing(t *testing.T) {
 
 	// THEN - verify state machine has X-Ray tracing enabled
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"TracingConfiguration": map[string]interface{}{
 			"Enabled": true,
@@ -1252,7 +1252,7 @@ func TestCloudWatchAlarmsPublishToSNS(t *testing.T) {
 
 	// THEN - verify CloudWatch alarms have SNS actions
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify at least one alarm has an AlarmActions property (SNS topic ARN)
 	template.HasResourceProperties(jsii.String("AWS::CloudWatch::Alarm"), map[string]interface{}{
 		"AlarmActions": assertions.Match_AnyValue(),
@@ -1269,13 +1269,13 @@ func TestAdvancedErrorHandlingForSpecificErrorTypes(t *testing.T) {
 
 	// THEN - verify state machine definition includes specific error handling
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Capture the state machine definition
 	captures := assertions.NewCapture(nil)
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"DefinitionString": captures,
 	})
-	
+
 	// Verify state machine exists with proper configuration
 	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))
 }
@@ -1294,20 +1294,20 @@ func TestEndToEndPipelineIntegration(t *testing.T) {
 
 	// THEN - verify complete end-to-end integration
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// 1. Input S3 bucket triggers EventBridge
 	template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
 		"BucketEncryption": assertions.Match_ObjectLike(&map[string]interface{}{
 			"ServerSideEncryptionConfiguration": assertions.Match_AnyValue(),
 		}),
 	})
-	
+
 	// 2. EventBridge rule is enabled and targets state machine
 	template.HasResourceProperties(jsii.String("AWS::Events::Rule"), map[string]interface{}{
-		"State": "ENABLED",
+		"State":   "ENABLED",
 		"Targets": assertions.Match_AnyValue(),
 	})
-	
+
 	// 3. State machine has all required task states for complete processing
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"LoggingConfiguration": map[string]interface{}{
@@ -1317,19 +1317,19 @@ func TestEndToEndPipelineIntegration(t *testing.T) {
 			"Enabled": true,
 		},
 	})
-	
+
 	// 4. Lambda function has all required permissions and environment variables
 	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
 		"Runtime": "provided.al2023",
 		"Handler": "bootstrap",
 		"Environment": map[string]interface{}{
 			"Variables": assertions.Match_ObjectLike(&map[string]interface{}{
-				"TABLE_NAME": assertions.Match_AnyValue(),
+				"TABLE_NAME":    assertions.Match_AnyValue(),
 				"OUTPUT_BUCKET": assertions.Match_AnyValue(),
 			}),
 		},
 	})
-	
+
 	// 5. DynamoDB table exists with proper configuration
 	template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
 		"BillingMode": "PAY_PER_REQUEST",
@@ -1340,25 +1340,25 @@ func TestEndToEndPipelineIntegration(t *testing.T) {
 			"PointInTimeRecoveryEnabled": true,
 		},
 	})
-	
+
 	// 6. SNS topics exist with encryption for notifications
 	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))
 	template.HasResourceProperties(jsii.String("AWS::SNS::Topic"), map[string]interface{}{
 		"KmsMasterKeyId": assertions.Match_AnyValue(),
 	})
-	
+
 	// 7. CloudWatch alarms exist for monitoring
 	template.HasResourceProperties(jsii.String("AWS::CloudWatch::Alarm"), map[string]interface{}{
 		"AlarmActions": assertions.Match_AnyValue(),
-		"MetricName": assertions.Match_AnyValue(),
+		"MetricName":   assertions.Match_AnyValue(),
 	})
-	
+
 	// Verify resource counts for complete pipeline
-	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))  // Input + Output
-	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))  // Metadata
-	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))  // Orchestrator
-	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))  // Trigger
-	template.ResourceCountIs(jsii.String("AWS::CloudWatch::Alarm"), jsii.Number(2))  // Monitoring
+	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))                  // Input + Output
+	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))             // Metadata
+	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1)) // Orchestrator
+	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))                // Trigger
+	template.ResourceCountIs(jsii.String("AWS::CloudWatch::Alarm"), jsii.Number(2))           // Monitoring
 }
 
 // TestSuccessPathNotifications verifies success notifications are properly configured.
@@ -1371,20 +1371,20 @@ func TestSuccessPathNotifications(t *testing.T) {
 
 	// THEN - verify success notification path
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify completed topic exists
 	template.HasResourceProperties(jsii.String("AWS::SNS::Topic"), map[string]interface{}{
-		"DisplayName": "Sleep Audio Pipeline Completed",
+		"DisplayName":    "Sleep Audio Pipeline Completed",
 		"KmsMasterKeyId": assertions.Match_AnyValue(),
 	})
-	
+
 	// Verify state machine has permissions to publish to SNS (both topics)
 	template.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]interface{}{
 		"PolicyDocument": map[string]interface{}{
 			"Statement": assertions.Match_ArrayWith(&[]interface{}{
 				map[string]interface{}{
-					"Action": "sns:Publish",
-					"Effect": "Allow",
+					"Action":   "sns:Publish",
+					"Effect":   "Allow",
 					"Resource": assertions.Match_AnyValue(),
 				},
 			}),
@@ -1402,13 +1402,13 @@ func TestFailurePathNotifications(t *testing.T) {
 
 	// THEN - verify failure notification path
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify failed topic exists
 	template.HasResourceProperties(jsii.String("AWS::SNS::Topic"), map[string]interface{}{
-		"DisplayName": "Sleep Audio Pipeline Failed",
+		"DisplayName":    "Sleep Audio Pipeline Failed",
 		"KmsMasterKeyId": assertions.Match_AnyValue(),
 	})
-	
+
 	// Verify CloudWatch alarms can send to failed topic
 	template.HasResourceProperties(jsii.String("AWS::CloudWatch::Alarm"), map[string]interface{}{
 		"AlarmActions": assertions.Match_AnyValue(),
@@ -1425,21 +1425,21 @@ func TestDataPersistenceConfiguration(t *testing.T) {
 
 	// THEN - verify data persistence is properly configured
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify DynamoDB table has point-in-time recovery
 	template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
 		"PointInTimeRecoverySpecification": map[string]interface{}{
 			"PointInTimeRecoveryEnabled": true,
 		},
 	})
-	
+
 	// Verify S3 buckets have versioning enabled
 	template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
 		"VersioningConfiguration": map[string]interface{}{
 			"Status": "Enabled",
 		},
 	})
-	
+
 	// Verify S3 buckets have encryption
 	template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
 		"BucketEncryption": map[string]interface{}{
@@ -1458,29 +1458,29 @@ func TestObservabilityConfiguration(t *testing.T) {
 
 	// THEN - verify observability is properly configured
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify state machine has X-Ray tracing enabled
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"TracingConfiguration": map[string]interface{}{
 			"Enabled": true,
 		},
 	})
-	
+
 	// Verify state machine has comprehensive logging
 	template.HasResourceProperties(jsii.String("AWS::StepFunctions::StateMachine"), map[string]interface{}{
 		"LoggingConfiguration": map[string]interface{}{
-			"Level": "ALL",
+			"Level":        "ALL",
 			"Destinations": assertions.Match_AnyValue(),
 		},
 	})
-	
+
 	// Verify Lambda has X-Ray tracing enabled
 	template.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]interface{}{
 		"TracingConfig": map[string]interface{}{
 			"Mode": "Active",
 		},
 	})
-	
+
 	// Verify CloudWatch log group exists
 	template.HasResourceProperties(jsii.String("AWS::Logs::LogGroup"), map[string]interface{}{
 		"RetentionInDays": 7,
@@ -1497,36 +1497,36 @@ func TestSecurityConfiguration(t *testing.T) {
 
 	// THEN - verify security configuration
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Verify S3 buckets block public access
 	template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
 		"PublicAccessBlockConfiguration": map[string]interface{}{
-			"BlockPublicAcls": true,
-			"BlockPublicPolicy": true,
-			"IgnorePublicAcls": true,
+			"BlockPublicAcls":       true,
+			"BlockPublicPolicy":     true,
+			"IgnorePublicAcls":      true,
 			"RestrictPublicBuckets": true,
 		},
 	})
-	
+
 	// Verify S3 buckets are encrypted
 	template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
 		"BucketEncryption": map[string]interface{}{
 			"ServerSideEncryptionConfiguration": assertions.Match_AnyValue(),
 		},
 	})
-	
+
 	// Verify DynamoDB table is encrypted
 	template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
 		"SSESpecification": map[string]interface{}{
 			"SSEEnabled": true,
 		},
 	})
-	
+
 	// Verify SNS topics use KMS encryption
 	template.HasResourceProperties(jsii.String("AWS::SNS::Topic"), map[string]interface{}{
 		"KmsMasterKeyId": assertions.Match_AnyValue(),
 	})
-	
+
 	// Verify KMS key exists with rotation enabled
 	template.HasResourceProperties(jsii.String("AWS::KMS::Key"), map[string]interface{}{
 		"EnableKeyRotation": true,
@@ -1543,15 +1543,15 @@ func TestPipelineResourceCounts(t *testing.T) {
 
 	// THEN - verify exact resource counts
 	template := assertions.Template_FromStack(stack, nil)
-	
+
 	// Core pipeline resources
-	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))  // Input + Output
-	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))  // Metadata
-	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))  // Orchestrator
-	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))  // EventBridge trigger
-	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))  // Processor + handlers (dev default)
-	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))  // Success + Failure
-	template.ResourceCountIs(jsii.String("AWS::KMS::Key"), jsii.Number(1))  // SNS encryption
-	template.ResourceCountIs(jsii.String("AWS::CloudWatch::Alarm"), jsii.Number(2))  // StateMachine + Lambda monitoring
-	template.ResourceCountIs(jsii.String("AWS::Logs::LogGroup"), jsii.Number(1))  // State machine logs
+	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))                  // Input + Output
+	template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))             // Metadata
+	template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1)) // Orchestrator
+	template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))                // EventBridge trigger
+	template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3))            // Processor + handlers (dev default)
+	template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))                  // Success + Failure
+	template.ResourceCountIs(jsii.String("AWS::KMS::Key"), jsii.Number(1))                    // SNS encryption
+	template.ResourceCountIs(jsii.String("AWS::CloudWatch::Alarm"), jsii.Number(2))           // StateMachine + Lambda monitoring
+	template.ResourceCountIs(jsii.String("AWS::Logs::LogGroup"), jsii.Number(1))              // State machine logs
 }
