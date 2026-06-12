@@ -38,7 +38,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			envContext = envStr
 		}
 	}
-	
+
 	// Set removal policy based on environment
 	// dev: DESTROY for easy cleanup
 	// stage/prod: RETAIN for data safety
@@ -51,12 +51,12 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 
 	// Input S3 Bucket - receives raw audio uploads
 	inputBucket := awss3.NewBucket(stack, jsii.String("SleepAudioInputBucket"), &awss3.BucketProps{
-		Encryption:        awss3.BucketEncryption_S3_MANAGED,
-		Versioned:         jsii.Bool(true),
-		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
+		Encryption:         awss3.BucketEncryption_S3_MANAGED,
+		Versioned:          jsii.Bool(true),
+		BlockPublicAccess:  awss3.BlockPublicAccess_BLOCK_ALL(),
 		EventBridgeEnabled: jsii.Bool(true),
-		RemovalPolicy:     removalPolicy,
-		AutoDeleteObjects: jsii.Bool(envContext == "dev"), // Only auto-delete in dev
+		RemovalPolicy:      removalPolicy,
+		AutoDeleteObjects:  jsii.Bool(envContext == "dev"), // Only auto-delete in dev
 	})
 
 	// Output S3 Bucket - stores processed audio
@@ -74,12 +74,12 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			Name: jsii.String("audioId"),
 			Type: awsdynamodb.AttributeType_STRING,
 		},
-		BillingMode:              awsdynamodb.BillingMode_PAY_PER_REQUEST,
-		Encryption:               awsdynamodb.TableEncryption_AWS_MANAGED,
+		BillingMode: awsdynamodb.BillingMode_PAY_PER_REQUEST,
+		Encryption:  awsdynamodb.TableEncryption_AWS_MANAGED,
 		PointInTimeRecoverySpecification: &awsdynamodb.PointInTimeRecoverySpecification{
 			PointInTimeRecoveryEnabled: jsii.Bool(true),
 		},
-		RemovalPolicy:            removalPolicy,
+		RemovalPolicy: removalPolicy,
 	})
 
 	// Lambda Function - Audio Processor
@@ -92,21 +92,21 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			"TABLE_NAME":    metadataTable.TableName(),
 			"OUTPUT_BUCKET": outputBucket.BucketName(),
 		},
-		Timeout:     awscdk.Duration_Minutes(jsii.Number(5)),  // Increased for processing
-		MemorySize:  jsii.Number(512),                          // Increased for audio processing
+		Timeout:     awscdk.Duration_Minutes(jsii.Number(5)), // Increased for processing
+		MemorySize:  jsii.Number(512),                        // Increased for audio processing
 		Description: jsii.String("Processes audio files, generates sleep sounds, and uploads to output bucket"),
 		Tracing:     awslambda.Tracing_ACTIVE,
 	})
 
 	// Grant the Lambda function read access to input bucket
 	inputBucket.GrantRead(audioProcessorFunction, jsii.String("*"))
-	
+
 	// Grant the Lambda function write access to output bucket
 	outputBucket.GrantWrite(audioProcessorFunction, jsii.String("*"), nil)
-	
+
 	// Grant the Lambda function read and write access to DynamoDB
 	metadataTable.GrantReadWriteData(audioProcessorFunction)
-	
+
 	// Grant the Lambda function permissions to use Polly for speech synthesis
 	audioProcessorFunction.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Actions:   jsii.Strings("polly:SynthesizeSpeech"),
@@ -118,31 +118,31 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 
 	// KMS Key for SNS topic encryption
 	snsKmsKey := awskms.NewKey(stack, jsii.String("SnsTopicKey"), &awskms.KeyProps{
-		Description:      jsii.String("KMS key for SNS topic encryption"),
+		Description:       jsii.String("KMS key for SNS topic encryption"),
 		EnableKeyRotation: jsii.Bool(true),
-		RemovalPolicy:    awscdk.RemovalPolicy_DESTROY, // For dev/test - change for production
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY, // For dev/test - change for production
 	})
 
 	// SNS Topic - pipeline completion notifications
 	completedTopic := awssns.NewTopic(stack, jsii.String("SleepAudioPipelineCompletedTopic"), &awssns.TopicProps{
-		DisplayName:    jsii.String("Sleep Audio Pipeline Completed"),
-		MasterKey:      snsKmsKey,
+		DisplayName: jsii.String("Sleep Audio Pipeline Completed"),
+		MasterKey:   snsKmsKey,
 	})
 
 	// SNS Topic - pipeline failure notifications
 	failedTopic := awssns.NewTopic(stack, jsii.String("SleepAudioPipelineFailedTopic"), &awssns.TopicProps{
-		DisplayName:    jsii.String("Sleep Audio Pipeline Failed"),
-		MasterKey:      snsKmsKey,
+		DisplayName: jsii.String("Sleep Audio Pipeline Failed"),
+		MasterKey:   snsKmsKey,
 	})
 
 	// CloudWatch Log Group for Step Functions state machine
 	logGroup := awslogs.NewLogGroup(stack, jsii.String("StateMachineLogGroup"), &awslogs.LogGroupProps{
-		Retention:         awslogs.RetentionDays_ONE_WEEK,
-		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+		Retention:     awslogs.RetentionDays_ONE_WEEK,
+		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
 	})
 
 	// Step Functions State Machine - Audio Processing Pipeline
-	
+
 	// Pass state to set error message for missing input validation
 	invalidInputError := awsstepfunctions.NewPass(stack, jsii.String("InvalidInputError"), &awsstepfunctions.PassProps{
 		Parameters: &map[string]interface{}{
@@ -152,12 +152,12 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		},
 		ResultPath: jsii.String("$"),
 	})
-	
+
 	// Choice state for input validation - check if bucket and key exist
 	validateInputChoice := awsstepfunctions.NewChoice(stack, jsii.String("ValidateInput"), &awsstepfunctions.ChoiceProps{
 		Comment: jsii.String("Validate that bucket and key are present in the input"),
 	})
-	
+
 	// DynamoDB PutItem task - write initial metadata record when pipeline starts
 	putItemTask := awsstepfunctionstasks.NewDynamoPutItem(stack, jsii.String("WriteInitialMetadata"), &awsstepfunctionstasks.DynamoPutItemProps{
 		Table: metadataTable,
@@ -178,7 +178,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		},
 		ResultPath: jsii.String("$.dynamoResult"),
 	})
-	
+
 	// Add retry policy to DynamoDB PutItem task
 	putItemTask.AddRetry(&awsstepfunctions.RetryProps{
 		Errors: jsii.Strings(
@@ -186,18 +186,18 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			"DynamoDB.RequestLimitExceeded",
 			"DynamoDB.InternalServerError",
 		),
-		Interval:      awscdk.Duration_Seconds(jsii.Number(1)),
-		MaxAttempts:   jsii.Number(3),
-		BackoffRate:   jsii.Number(2.0),
+		Interval:    awscdk.Duration_Seconds(jsii.Number(1)),
+		MaxAttempts: jsii.Number(3),
+		BackoffRate: jsii.Number(2.0),
 	})
-	
+
 	// Lambda invocation task - process and validate audio file
 	processAudioTask := awsstepfunctionstasks.NewLambdaInvoke(stack, jsii.String("ProcessAudioFile"), &awsstepfunctionstasks.LambdaInvokeProps{
-		LambdaFunction: audioProcessorFunction,
-		ResultPath:     jsii.String("$.processorResult"),
+		LambdaFunction:      audioProcessorFunction,
+		ResultPath:          jsii.String("$.processorResult"),
 		PayloadResponseOnly: jsii.Bool(true),
 	})
-	
+
 	// Add retry policy to Lambda invocation task
 	processAudioTask.AddRetry(&awsstepfunctions.RetryProps{
 		Errors: jsii.Strings(
@@ -206,11 +206,11 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			"Lambda.SdkClientException",
 			"Lambda.TooManyRequestsException",
 		),
-		Interval:      awscdk.Duration_Seconds(jsii.Number(2)),
-		MaxAttempts:   jsii.Number(3),
-		BackoffRate:   jsii.Number(2.0),
+		Interval:    awscdk.Duration_Seconds(jsii.Number(2)),
+		MaxAttempts: jsii.Number(3),
+		BackoffRate: jsii.Number(2.0),
 	})
-	
+
 	// Pass state to format Lambda errors for the error handling chain
 	formatLambdaError := awsstepfunctions.NewPass(stack, jsii.String("FormatLambdaError"), &awsstepfunctions.PassProps{
 		Parameters: &map[string]interface{}{
@@ -218,7 +218,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		},
 		ResultPath: jsii.String("$"),
 	})
-	
+
 	// Polly task - synthesizes speech from text (placeholder configuration for now)
 	pollyTask := awsstepfunctionstasks.NewCallAwsService(stack, jsii.String("PollyTask"), &awsstepfunctionstasks.CallAwsServiceProps{
 		Service: jsii.String("polly"),
@@ -231,7 +231,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		IamResources: jsii.Strings("*"),
 		ResultPath:   jsii.String("$.pollyResult"),
 	})
-	
+
 	// Add retry policy to Polly task
 	pollyTask.AddRetry(&awsstepfunctions.RetryProps{
 		Errors: jsii.Strings(
@@ -239,9 +239,9 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			"Polly.ThrottlingException",
 			"States.TaskFailed",
 		),
-		Interval:      awscdk.Duration_Seconds(jsii.Number(1)),
-		MaxAttempts:   jsii.Number(3),
-		BackoffRate:   jsii.Number(1.5),
+		Interval:    awscdk.Duration_Seconds(jsii.Number(1)),
+		MaxAttempts: jsii.Number(3),
+		BackoffRate: jsii.Number(1.5),
 	})
 
 	// DynamoDB UpdateItem task - update status to COMPLETED on success
@@ -265,7 +265,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		},
 		ResultPath: jsii.String("$.updateResult"),
 	})
-	
+
 	// Add retry policy to DynamoDB UpdateItem task (completion)
 	updateStatusCompleted.AddRetry(&awsstepfunctions.RetryProps{
 		Errors: jsii.Strings(
@@ -273,16 +273,16 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			"DynamoDB.RequestLimitExceeded",
 			"DynamoDB.InternalServerError",
 		),
-		Interval:      awscdk.Duration_Seconds(jsii.Number(1)),
-		MaxAttempts:   jsii.Number(3),
-		BackoffRate:   jsii.Number(2.0),
+		Interval:    awscdk.Duration_Seconds(jsii.Number(1)),
+		MaxAttempts: jsii.Number(3),
+		BackoffRate: jsii.Number(2.0),
 	})
 
 	// SNS Publish task - send completion notification
 	publishCompletedNotification := awsstepfunctionstasks.NewSnsPublish(stack, jsii.String("PublishCompletedNotification"), &awsstepfunctionstasks.SnsPublishProps{
-		Topic:   completedTopic,
+		Topic: completedTopic,
 		Message: awsstepfunctions.TaskInput_FromObject(&map[string]interface{}{
-			"status": "COMPLETED",
+			"status":  "COMPLETED",
 			"audioId": awsstepfunctions.JsonPath_StringAt(jsii.String("$.key")),
 			"bucket":  awsstepfunctions.JsonPath_StringAt(jsii.String("$.bucket")),
 			"message": "Audio processing pipeline completed successfully",
@@ -306,7 +306,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			"#error":     jsii.String("errorMessage"),
 		},
 		ExpressionAttributeValues: &map[string]awsstepfunctionstasks.DynamoAttributeValue{
-			":failed":    awsstepfunctionstasks.DynamoAttributeValue_FromString(jsii.String("FAILED")),
+			":failed": awsstepfunctionstasks.DynamoAttributeValue_FromString(jsii.String("FAILED")),
 			":timestamp": awsstepfunctionstasks.DynamoAttributeValue_FromString(
 				awsstepfunctions.JsonPath_StringAt(jsii.String("$$.State.EnteredTime")),
 			),
@@ -316,7 +316,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		},
 		ResultPath: jsii.String("$.updateResult"),
 	})
-	
+
 	// Add retry policy to DynamoDB UpdateItem task (failure)
 	updateStatusFailed.AddRetry(&awsstepfunctions.RetryProps{
 		Errors: jsii.Strings(
@@ -324,16 +324,16 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 			"DynamoDB.RequestLimitExceeded",
 			"DynamoDB.InternalServerError",
 		),
-		Interval:      awscdk.Duration_Seconds(jsii.Number(1)),
-		MaxAttempts:   jsii.Number(3),
-		BackoffRate:   jsii.Number(2.0),
+		Interval:    awscdk.Duration_Seconds(jsii.Number(1)),
+		MaxAttempts: jsii.Number(3),
+		BackoffRate: jsii.Number(2.0),
 	})
 
 	// SNS Publish task - send failure notification
 	publishFailedNotification := awsstepfunctionstasks.NewSnsPublish(stack, jsii.String("PublishFailedNotification"), &awsstepfunctionstasks.SnsPublishProps{
-		Topic:   failedTopic,
+		Topic: failedTopic,
 		Message: awsstepfunctions.TaskInput_FromObject(&map[string]interface{}{
-			"status": "FAILED",
+			"status":  "FAILED",
 			"audioId": awsstepfunctions.JsonPath_StringAt(jsii.String("$.key")),
 			"bucket":  awsstepfunctions.JsonPath_StringAt(jsii.String("$.bucket")),
 			"error":   awsstepfunctions.JsonPath_StringAt(jsii.String("$.errorMessage")),
@@ -345,22 +345,22 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 
 	// Define error handling path: format error, update status to FAILED, then send notification
 	lambdaErrorChain := formatLambdaError.Next(updateStatusFailed).Next(publishFailedNotification)
-	
+
 	// Wire up invalid input error path
 	invalidInputError.Next(publishFailedNotification)
-	
+
 	// Add error handling to the Lambda task (for validation errors)
 	processAudioTask.AddCatch(lambdaErrorChain, &awsstepfunctions.CatchProps{
-		Errors: jsii.Strings("States.ALL"),
+		Errors:     jsii.Strings("States.ALL"),
 		ResultPath: jsii.String("$.errorInfo"),
 	})
-	
+
 	// Add error handling to the Polly task
 	pollyTask.AddCatch(lambdaErrorChain, &awsstepfunctions.CatchProps{
-		Errors: jsii.Strings("States.ALL"),
+		Errors:     jsii.Strings("States.ALL"),
 		ResultPath: jsii.String("$.errorInfo"),
 	}).Next(updateStatusCompleted).Next(publishCompletedNotification)
-	
+
 	// Wire up the Choice state for input validation
 	// Check if both bucket and key are present (not null and have a length > 0)
 	validateInputChoice.When(
@@ -386,12 +386,12 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 	})
 
 	// CloudWatch Alarms for observability
-	
+
 	// Alarm for State Machine Execution Failures
 	stateMachineFailureAlarm := awscloudwatch.NewAlarm(stack, jsii.String("StateMachineExecutionFailureAlarm"), &awscloudwatch.AlarmProps{
 		Metric: stateMachine.MetricFailed(&awscloudwatch.MetricOptions{
-			Period:     awscdk.Duration_Minutes(jsii.Number(5)),
-			Statistic:  jsii.String("Sum"),
+			Period:    awscdk.Duration_Minutes(jsii.Number(5)),
+			Statistic: jsii.String("Sum"),
 		}),
 		Threshold:          jsii.Number(1),
 		EvaluationPeriods:  jsii.Number(1),
@@ -400,15 +400,15 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		AlarmName:          jsii.String("SleepAudioPipeline-StateMachine-Failures"),
 		TreatMissingData:   awscloudwatch.TreatMissingData_NOT_BREACHING,
 	})
-	
+
 	// Add SNS action to publish to failed topic when alarm triggers
 	stateMachineFailureAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(failedTopic))
-	
+
 	// Alarm for Lambda Errors
 	lambdaErrorAlarm := awscloudwatch.NewAlarm(stack, jsii.String("LambdaErrorAlarm"), &awscloudwatch.AlarmProps{
 		Metric: audioProcessorFunction.MetricErrors(&awscloudwatch.MetricOptions{
-			Period:     awscdk.Duration_Minutes(jsii.Number(5)),
-			Statistic:  jsii.String("Sum"),
+			Period:    awscdk.Duration_Minutes(jsii.Number(5)),
+			Statistic: jsii.String("Sum"),
 		}),
 		Threshold:          jsii.Number(5),
 		EvaluationPeriods:  jsii.Number(1),
@@ -417,7 +417,7 @@ func NewCdkBaseStack(scope constructs.Construct, id string, props *CdkBaseStackP
 		AlarmName:          jsii.String("SleepAudioPipeline-Lambda-Errors"),
 		TreatMissingData:   awscloudwatch.TreatMissingData_NOT_BREACHING,
 	})
-	
+
 	// Add SNS action to publish to failed topic when alarm triggers
 	lambdaErrorAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(failedTopic))
 
