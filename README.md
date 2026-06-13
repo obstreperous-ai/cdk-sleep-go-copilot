@@ -353,13 +353,15 @@ Comprehensive documentation provides complete project context:
 |---|---|---|
 | **[README.md](README.md)** | Project overview, quick start, features | All users |
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | Complete system design, data flow, Mermaid diagrams | Developers, architects |
+| **[EXPERIMENT.md](EXPERIMENT.md)** | 🔬 **Experimental design, methodology, TDD approach, observations** | **Researchers, AI practitioners** |
 | **[SUMMARY.md](SUMMARY.md)** | Project completion status, key decisions, lessons learned | Project managers, contributors |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | TDD workflow, contribution guidelines, PR checklist | Contributors |
 | **[.github/AGENT_GUIDELINES.md](.github/AGENT_GUIDELINES.md)** | Agent persona, strict rules, development workflow | AI agents, automation |
 | **[.github/META-PROMPTS.md](.github/META-PROMPTS.md)** | 🆕 **Reusable meta-prompting patterns and templates** | **Anyone building IaC with AI** |
 
-**Special Note on META-PROMPTS.md:**  
-This document extracts the **reusable patterns** from this project that can be applied to future TDD IaC projects. It includes agent persona templates, testing patterns, security checklists, and workflow templates. If you're interested in replicating this development approach, start here.
+**Special Notes:**  
+- **EXPERIMENT.md**: Documents the **complete experimental methodology** behind this project—how strict TDD, issue-driven development, and meta-prompting work together. Essential reading for understanding the "why" behind the architecture and workflow.
+- **META-PROMPTS.md**: Extracts the **reusable patterns** that can be applied to future TDD IaC projects. Includes agent persona templates, testing patterns, security checklists, and workflow templates. If you're replicating this development approach, start here.
 
 ## 🛠️ Technology Stack
 
