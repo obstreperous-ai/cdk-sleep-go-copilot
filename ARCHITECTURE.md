@@ -863,7 +863,113 @@ A self-mutating deployment pipeline will be added using `aws-cdk-lib/pipelines`:
 
 ---
 
-## 11. Future Extensibility
+## 11. Documentation Architecture
+
+**Documentation Strategy (Issue #13):**
+
+The project maintains a comprehensive, multi-layered documentation structure designed to serve different audiences and use cases.
+
+### Documentation Layers
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      README.md                          │
+│              (Entry Point for All Users)                │
+│  - Project overview and "Why This Project?"             │
+│  - Table of contents for easy navigation                │
+│  - Quick start guide                                    │
+│  - Experiment methodology and meta-prompting            │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐
+│ARCHITECTURE  │ │   SUMMARY    │ │    CONTRIBUTING      │
+│   .md        │ │    .md       │ │      .md             │
+│              │ │              │ │                      │
+│Technical     │ │Project       │ │TDD Workflow &        │
+│Design &      │ │Completion    │ │Contribution          │
+│Data Flow     │ │& Lessons     │ │Guidelines            │
+└──────────────┘ └──────────────┘ └──────────────────────┘
+        │
+        ▼
+┌───────────────────────────────────────────────────────┐
+│              .github/ Directory                       │
+│                                                       │
+│  ┌───────────────────────────────────────────────┐   │
+│  │  AGENT_GUIDELINES.md                          │   │
+│  │  - Agent persona definition                   │   │
+│  │  - Strict TDD rules                           │   │
+│  │  - Development workflow                       │   │
+│  └───────────────────────────────────────────────┘   │
+│                                                       │
+│  ┌───────────────────────────────────────────────┐   │
+│  │  META-PROMPTS.md (New - Issue #13)            │   │
+│  │  - Reusable meta-prompting patterns           │   │
+│  │  - Agent persona templates                    │   │
+│  │  - Testing patterns for IaC                   │   │
+│  │  - Security & observability checklists        │   │
+│  └───────────────────────────────────────────────┘   │
+│                                                       │
+│  ┌───────────────────────────────────────────────┐   │
+│  │  templates/ (New - Issue #13)                 │   │
+│  │  ├── ISSUE_TEMPLATE_TDD_IaC.md                │   │
+│  │  ├── PULL_REQUEST_TEMPLATE.md                 │   │
+│  │  ├── AGENT_PROMPT_TEMPLATE.md                 │   │
+│  │  └── README.md (template usage guide)         │   │
+│  └───────────────────────────────────────────────┘   │
+└───────────────────────────────────────────────────────┘
+```
+
+### Documentation Principles
+
+1. **Single Source of Truth**  
+   ARCHITECTURE.md is the canonical reference for system design. All changes to infrastructure topology must update this document.
+
+2. **Living Documentation**  
+   Documentation is updated in the same PR as code changes. No divergence allowed.
+
+3. **Multi-Audience Design**  
+   - **README.md** - All users (quick start, features, overview)
+   - **ARCHITECTURE.md** - Developers and architects (technical design)
+   - **SUMMARY.md** - Project managers and stakeholders (status, decisions)
+   - **CONTRIBUTING.md** - Contributors (workflow, standards)
+   - **AGENT_GUIDELINES.md** - AI agents and automation (persona, rules)
+   - **META-PROMPTS.md** - Future IaC projects (reusable patterns)
+
+4. **Extractable Patterns**  
+   Key patterns and templates are extracted into reusable formats in `.github/templates/` for application to other projects.
+
+### Meta-Prompting Documentation
+
+The project's meta-prompting approach is documented at three levels:
+
+1. **Project-Specific** (`.github/AGENT_GUIDELINES.md`)  
+   - Agent persona for this specific project
+   - Project-specific strict rules
+   - Workflow tailored to cdk-sleep-go-copilot
+
+2. **Reusable Patterns** (`.github/META-PROMPTS.md`)  
+   - Generalized patterns extracted from this project
+   - Applicable to any TDD IaC project
+   - Templates for agent personas, testing, security
+
+3. **Ready-to-Use Templates** (`.github/templates/`)  
+   - Copy-paste templates for issues, PRs, agent prompts
+   - Customizable for different languages/frameworks
+   - Include usage guides and best practices
+
+### Documentation Metrics (Issue #13)
+
+- **Total Documentation Files:** 7 primary + 4 templates = 11 files
+- **README Enhancement:** Added table of contents, "Why This Project?", experiment methodology, meta-prompting sections
+- **New Documents:** META-PROMPTS.md (20KB+), 4 reusable templates
+- **Link Validation:** 100% verified working links
+- **Audience Coverage:** Users, developers, architects, project managers, AI agents
+
+---
+
+## 12. Future Extensibility
 
 - **Additional EventBridge targets:** Add analytics, auditing, or a data-lake
   ingestion target without modifying producers.
@@ -878,7 +984,7 @@ A self-mutating deployment pipeline will be added using `aws-cdk-lib/pipelines`:
 
 ---
 
-## 12. AWS Well-Architected Alignment
+## 13. AWS Well-Architected Alignment
 
 | Pillar | Design Decision |
 |---|---|
