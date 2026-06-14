@@ -881,16 +881,16 @@ The project maintains a comprehensive, multi-layered documentation structure des
 │  - Experiment methodology and meta-prompting            │
 └──────────────────────┬──────────────────────────────────┘
                        │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐
-│ARCHITECTURE  │ │   SUMMARY    │ │    CONTRIBUTING      │
-│   .md        │ │    .md       │ │      .md             │
-│              │ │              │ │                      │
-│Technical     │ │Project       │ │TDD Workflow &        │
-│Design &      │ │Completion    │ │Contribution          │
-│Data Flow     │ │& Lessons     │ │Guidelines            │
-└──────────────┘ └──────────────┘ └──────────────────────┘
+        ┌──────────────┼──────────────┬───────────────┐
+        ▼              ▼              ▼               ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐
+│ARCHITECTURE  │ │  EXPERIMENT  │ │   SUMMARY    │ │   CONTRIBUTING   │
+│   .md        │ │    .md       │ │    .md       │ │      .md         │
+│              │ │              │ │              │ │                  │
+│Technical     │ │Experimental  │ │Project       │ │TDD Workflow &    │
+│Design &      │ │Methodology & │ │Completion    │ │Contribution      │
+│Data Flow     │ │Observations  │ │& Lessons     │ │Guidelines        │
+└──────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘
         │
         ▼
 ┌───────────────────────────────────────────────────────┐
@@ -932,6 +932,7 @@ The project maintains a comprehensive, multi-layered documentation structure des
 3. **Multi-Audience Design**  
    - **README.md** - All users (quick start, features, overview)
    - **ARCHITECTURE.md** - Developers and architects (technical design)
+   - **EXPERIMENT.md** - Researchers and AI practitioners (methodology, observations)
    - **SUMMARY.md** - Project managers and stakeholders (status, decisions)
    - **CONTRIBUTING.md** - Contributors (workflow, standards)
    - **AGENT_GUIDELINES.md** - AI agents and automation (persona, rules)
@@ -959,13 +960,17 @@ The project's meta-prompting approach is documented at three levels:
    - Customizable for different languages/frameworks
    - Include usage guides and best practices
 
-### Documentation Metrics (Issue #13)
+### Documentation Metrics (Issue #13 + #14)
 
-- **Total Documentation Files:** 7 primary + 4 templates = 11 files
+- **Total Documentation Files:** 8 primary + 4 templates = 12 files
+- **Core Documents:** README, ARCHITECTURE, EXPERIMENT, SUMMARY, CONTRIBUTING, AGENT_GUIDELINES, META-PROMPTS, (+ issue/PR templates)
 - **README Enhancement:** Added table of contents, "Why This Project?", experiment methodology, meta-prompting sections
-- **New Documents:** META-PROMPTS.md (20KB+), 4 reusable templates
+- **New Documents:** 
+  - META-PROMPTS.md (20KB+, Issue #13) - Reusable patterns
+  - EXPERIMENT.md (24KB, Issue #14) - Experimental design & methodology
+  - 4 reusable templates (Issue #13)
 - **Link Validation:** 100% verified working links
-- **Audience Coverage:** Users, developers, architects, project managers, AI agents
+- **Audience Coverage:** Users, developers, architects, project managers, AI agents, researchers
 
 ---
 
