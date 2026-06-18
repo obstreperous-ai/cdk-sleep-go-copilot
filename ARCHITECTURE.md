@@ -863,6 +863,103 @@ A self-mutating deployment pipeline will be added using `aws-cdk-lib/pipelines`:
 
 ---
 
+## 10. Development Workflow & TDD Process
+
+This section visualizes the strict TDD workflow that was followed throughout the project's development.
+
+### 10.1. Issue-Driven TDD Workflow
+
+```mermaid
+flowchart TD
+    Start([GitHub Issue Created]) --> Parse[Parse Issue Requirements]
+    Parse --> WriteTest[Write Failing Test<br/>go test should FAIL]
+    WriteTest --> TestFails{Test Fails<br/>Correctly?}
+    TestFails -->|No| FixTest[Fix Test]
+    FixTest --> WriteTest
+    TestFails -->|Yes| Implement[Implement Minimum Code]
+    
+    Implement --> RunTests[Run: go test ./...]
+    RunTests --> TestPass{All Tests<br/>Pass?}
+    TestPass -->|No| Debug[Debug Implementation]
+    Debug --> Implement
+    
+    TestPass -->|Yes| Synth[Run: cdk synth]
+    Synth --> SynthPass{Synth<br/>Succeeds?}
+    SynthPass -->|No| FixCDK[Fix CDK Issues]
+    FixCDK --> Implement
+    
+    SynthPass -->|Yes| UpdateDocs[Update ARCHITECTURE.md<br/>if needed]
+    UpdateDocs --> Commit[Commit with<br/>Conventional Message]
+    Commit --> Push[Push to PR Branch]
+    Push --> CI[GitHub Actions CI]
+    
+    CI --> CIPass{CI Pass?}
+    CIPass -->|No| FixCI[Fix CI Issues]
+    FixCI --> Implement
+    
+    CIPass -->|Yes| Review[Code Review<br/>& Validation]
+    Review --> Merge[Merge to Main]
+    Merge --> End([Issue Closed])
+    
+    classDef testPhase fill:#fff3cd,stroke:#ffc107,stroke-width:2px;
+    classDef implPhase fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    classDef ciPhase fill:#cce5ff,stroke:#0056b3,stroke-width:2px;
+    classDef decision fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
+    
+    class WriteTest,TestFails,FixTest testPhase;
+    class Implement,Debug,FixCDK,UpdateDocs implPhase;
+    class CI,CIPass,Review,Merge ciPhase;
+    class TestFails,TestPass,SynthPass,CIPass decision;
+```
+
+**Key Principles:**
+1. **Test-First Always:** No implementation code written before a failing test
+2. **Red-Green-Refactor:** Fail → Pass → Improve cycle strictly followed
+3. **CDK Synth Validation:** Every change validated with `cdk synth`
+4. **Documentation Sync:** ARCHITECTURE.md updated atomically with code
+5. **CI Gatekeeper:** No merge without 100% CI pass
+
+### 10.2. Test Coverage Philosophy
+
+```mermaid
+flowchart LR
+    subgraph Testable ["Testable Code (89.7%)"]
+        CDK["CDK Infrastructure<br/>cdk-base.go<br/>98.1% coverage"]
+        Lambda["Lambda Functions<br/>audio-processor<br/>70%+ coverage"]
+    end
+    
+    subgraph NotTestable ["Excluded from Coverage (10.3%)"]
+        CLI["CLI Entry Points<br/>main(), env()<br/>0% coverage<br/>(acceptable)"]
+    end
+    
+    subgraph TestSuite ["Test Suite (3.2:1 Ratio)"]
+        CDKTests["54 CDK Tests<br/>1,557 lines<br/>cdk-base_test.go"]
+        LambdaTests["6 Lambda Tests<br/>177 lines<br/>main_test.go"]
+    end
+    
+    CDK --> CDKTests
+    Lambda --> LambdaTests
+    CLI -.-> NoTests["No Tests Needed<br/>(CLI orchestration)"]
+    
+    CDKTests --> Assertions["Assertion Types:<br/>• IAM permissions<br/>• Encryption settings<br/>• Resource properties<br/>• Error handling<br/>• Multi-env config"]
+    
+    classDef tested fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    classDef excluded fill:#f8f9fa,stroke:#6c757d,stroke-width:2px;
+    classDef tests fill:#cce5ff,stroke:#0056b3,stroke-width:2px;
+    
+    class CDK,Lambda tested;
+    class CLI,NoTests excluded;
+    class CDKTests,LambdaTests,TestSuite tests;
+```
+
+**Coverage Rationale:**
+- **98.1% on core infrastructure** (NewCdkBaseStack) validates all business logic
+- **0% on CLI entry points** (main, env) is intentional—these orchestrate CDK synthesis
+- **3.2:1 test-to-code ratio** demonstrates extreme TDD discipline
+- **Lambda tests pragmatically split** unit tests vs. integration tests requiring AWS
+
+---
+
 ## 11. Documentation Architecture
 
 **Documentation Strategy (Issue #13):**
@@ -871,54 +968,56 @@ The project maintains a comprehensive, multi-layered documentation structure des
 
 ### Documentation Layers
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      README.md                          │
-│              (Entry Point for All Users)                │
-│  - Project overview and "Why This Project?"             │
-│  - Table of contents for easy navigation                │
-│  - Quick start guide                                    │
-│  - Experiment methodology and meta-prompting            │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-        ┌──────────────┼──────────────┬───────────────┐
-        ▼              ▼              ▼               ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐
-│ARCHITECTURE  │ │  EXPERIMENT  │ │   SUMMARY    │ │   CONTRIBUTING   │
-│   .md        │ │    .md       │ │    .md       │ │      .md         │
-│              │ │              │ │              │ │                  │
-│Technical     │ │Experimental  │ │Project       │ │TDD Workflow &    │
-│Design &      │ │Methodology & │ │Completion    │ │Contribution      │
-│Data Flow     │ │Observations  │ │& Lessons     │ │Guidelines        │
-└──────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘
-        │
-        ▼
-┌───────────────────────────────────────────────────────┐
-│              .github/ Directory                       │
-│                                                       │
-│  ┌───────────────────────────────────────────────┐   │
-│  │  AGENT_GUIDELINES.md                          │   │
-│  │  - Agent persona definition                   │   │
-│  │  - Strict TDD rules                           │   │
-│  │  - Development workflow                       │   │
-│  └───────────────────────────────────────────────┘   │
-│                                                       │
-│  ┌───────────────────────────────────────────────┐   │
-│  │  META-PROMPTS.md (New - Issue #13)            │   │
-│  │  - Reusable meta-prompting patterns           │   │
-│  │  - Agent persona templates                    │   │
-│  │  - Testing patterns for IaC                   │   │
-│  │  - Security & observability checklists        │   │
-│  └───────────────────────────────────────────────┘   │
-│                                                       │
-│  ┌───────────────────────────────────────────────┐   │
-│  │  templates/ (New - Issue #13)                 │   │
-│  │  ├── ISSUE_TEMPLATE_TDD_IaC.md                │   │
-│  │  ├── PULL_REQUEST_TEMPLATE.md                 │   │
-│  │  ├── AGENT_PROMPT_TEMPLATE.md                 │   │
-│  │  └── README.md (template usage guide)         │   │
-│  └───────────────────────────────────────────────┘   │
-└───────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Entry[README.md<br/>Entry Point]
+    
+    subgraph CoreDocs ["Core Documentation"]
+        Arch[ARCHITECTURE.md<br/>Technical Design & Diagrams]
+        Exp[EXPERIMENT.md<br/>Methodology & Observations]
+        Final[FINAL-REPORT.md<br/>Self-Evaluation & Metrics]
+        Sum[SUMMARY.md<br/>Project Status & Lessons]
+        Contrib[CONTRIBUTING.md<br/>TDD Workflow & Guidelines]
+    end
+    
+    subgraph MetaDocs [".github/ Meta-Documentation"]
+        Agent[AGENT_GUIDELINES.md<br/>Persona & Rules]
+        Meta[META-PROMPTS.md<br/>Reusable Patterns]
+        Templates[templates/<br/>Issue, PR, Agent Templates]
+    end
+    
+    subgraph Code ["Source Code"]
+        CDKCode[cdk-base.go<br/>488 lines implementation]
+        CDKTest[cdk-base_test.go<br/>1,557 lines tests]
+        LambdaCode[lambda/audio-processor/<br/>Go implementation]
+    end
+    
+    Entry --> CoreDocs
+    Entry --> MetaDocs
+    Entry --> Code
+    
+    Arch -.->|References| CDKCode
+    Arch -.->|Diagrams| Code
+    Exp -.->|Documents| MetaDocs
+    Final -.->|Analyzes| CDKTest
+    Agent -.->|Guides| Templates
+    Meta -.->|Extracted From| Agent
+    
+    CoreDocs -->|Reading Order| Reader1[New Developer:<br/>README → ARCHITECTURE → CONTRIBUTING]
+    CoreDocs -->|Reading Order| Reader2[Researcher:<br/>EXPERIMENT → FINAL-REPORT → Code]
+    MetaDocs -->|Reading Order| Reader3[Practitioner:<br/>META-PROMPTS → Templates → Apply]
+    
+    classDef entry fill:#ffd700,stroke:#ff8c00,stroke-width:3px;
+    classDef core fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    classDef meta fill:#cce5ff,stroke:#0056b3,stroke-width:2px;
+    classDef code fill:#f8f9fa,stroke:#6c757d,stroke-width:2px;
+    classDef reader fill:#fff3cd,stroke:#ffc107,stroke-width:2px;
+    
+    class Entry entry;
+    class Arch,Exp,Final,Sum,Contrib core;
+    class Agent,Meta,Templates meta;
+    class CDKCode,CDKTest,LambdaCode code;
+    class Reader1,Reader2,Reader3 reader;
 ```
 
 ### Documentation Principles
